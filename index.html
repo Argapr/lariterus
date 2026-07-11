@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0c111f">
+  <title>Lari Terus! — 3D Endless Runner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,800;1,700&family=Archivo+Black&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ===== MENU UTAMA ===== -->
+  <div id="menu" class="screen">
+    <header class="topbar">
+      <div class="logo">Lari Terus!<span class="logo-sub">3D Endless Runner</span></div>
+      <div class="topbar-right">
+        <button id="btn-daily" class="icon-btn" aria-label="Hadiah harian">🎁<span id="daily-dot" class="dot-badge hidden"></span></button>
+        <button id="btn-wheel" class="icon-btn" aria-label="Roda hadiah">🎡<span id="wheel-dot" class="dot-badge hidden"></span></button>
+        <div class="coin-pill">🪙 <span id="menu-coins-val">0</span></div>
+        <button class="avatar" id="btn-profile" aria-label="Profil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="menu-best" class="best-pill">🏆 SKOR TERBAIK: 0</div>
+
+    <!-- Kartu samping (layar lebar) -->
+    <aside class="side-cards">
+      <div class="side-card">
+        <div class="side-label">🏆 Skor Terbaik</div>
+        <div class="side-value" id="side-best">0</div>
+      </div>
+      <div class="side-card">
+        <div class="side-label">Level <span class="side-level-num" id="side-level">1</span></div>
+        <div class="level-bar"><div id="level-fill"></div></div>
+      </div>
+    </aside>
+
+    <!-- Area tengah: karakter 3D tampil dari canvas di belakang -->
+    <div class="menu-center">
+      <button class="car-arrow" id="car-prev" aria-label="Sebelumnya">‹</button>
+      <button class="car-arrow" id="car-next" aria-label="Berikutnya">›</button>
+    </div>
+
+    <div class="car-info">
+      <h2 id="car-name">KOMO</h2>
+      <p id="car-desc">Si Dino Sahabat</p>
+    </div>
+
+    <div class="menu-bottom">
+      <button id="btn-play" class="btn-main">▷&nbsp; MAIN</button>
+      <div id="car-dots" class="dots"></div>
+    </div>
+
+    <nav class="tabbar">
+      <button class="tab active" data-tab="karakter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5 21c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>
+        <span>Karakter</span>
+      </button>
+      <button class="tab" data-tab="tema">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18L9 8l4 6 3-4 5 8z"/></svg>
+        <span>Tema</span>
+      </button>
+      <button class="tab" data-tab="koleksi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.5 5.5L20 9.5l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-1z"/></svg>
+        <span>Koleksi</span>
+      </button>
+      <button class="tab" data-tab="misi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h6"/></svg>
+        <span>Misi</span>
+      </button>
+      <button class="tab" data-tab="peringkat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="12" width="4" height="8"/><rect x="10" y="6" width="4" height="14"/><rect x="16" y="10" width="4" height="10"/></svg>
+        <span>Peringkat</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud" class="screen hidden">
+    <div class="hud-top">
+      <div class="hud-box" id="hud-score">0</div>
+      <div class="hud-box hud-coins">🪙 <span id="hud-coins-val">0</span></div>
+      <button id="btn-pause" class="btn-icon">⏸</button>
+    </div>
+    <div id="powerups"></div>
+  </div>
+
+  <!-- ===== PAUSE ===== -->
+  <div id="pause-screen" class="screen overlay hidden">
+    <h2 class="ov-title">DIJEDA</h2>
+    <button id="btn-resume" class="btn-main">▷&nbsp; LANJUT</button>
+    <button id="btn-pause-menu" class="btn-dark">⌂&nbsp; Menu Utama</button>
+  </div>
+
+  <!-- ===== GAME OVER ===== -->
+  <div id="gameover" class="screen overlay hidden">
+    <h2 class="ov-title">GAME OVER!</h2>
+    <div class="go-score" id="go-score">0</div>
+    <div class="best-pill" id="go-best">🏆 TERBAIK: 0</div>
+    <div class="go-card">
+      <div class="go-stats">
+        <div class="go-stat">
+          <div class="go-label">Jarak</div>
+          <div class="go-val"><span id="go-dist">0</span> <small>m</small></div>
+        </div>
+        <div class="go-sep"></div>
+        <div class="go-stat">
+          <div class="go-label">Koin</div>
+          <div class="go-val">🪙 <span id="go-coins">0</span></div>
+        </div>
+      </div>
+      <div class="go-progress"><div id="go-progress-fill"></div></div>
+      <div class="go-note" id="go-note"></div>
+    </div>
+    <button id="btn-restart" class="btn-main">⟳&nbsp; MAIN LAGI</button>
+    <button id="btn-menu" class="btn-dark">⌂&nbsp; MENU UTAMA</button>
+  </div>
+
+  <!-- ===== MISI & PRESTASI ===== -->
+  <div id="missions-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🎯 MISI & PRESTASI</h2>
+    <p class="overlay-sub">Misi berganti tiap hari · prestasi berlaku selamanya</p>
+    <div id="mission-list" class="panel-list"></div>
+    <button id="btn-missions-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== HADIAH HARIAN ===== -->
+  <div id="daily-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🎁 HADIAH HARIAN</h2>
+    <p class="overlay-sub" id="daily-streak-text">Login tiap hari — streak putus kalau bolong!</p>
+    <div id="daily-grid" class="daily-grid"></div>
+    <button id="btn-daily-claim" class="btn-main">AMBIL HADIAH</button>
+    <button id="btn-daily-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== RODA HADIAH ===== -->
+  <div id="wheel-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🎡 RODA HADIAH</h2>
+    <p class="overlay-sub">Gratis sekali sehari!</p>
+    <div class="wheel-wrap">
+      <div class="wheel-pointer">▼</div>
+      <div id="wheel"></div>
+    </div>
+    <button id="btn-spin" class="btn-main">PUTAR!</button>
+    <button id="btn-wheel-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== PETI MISTERIUS ===== -->
+  <div id="chest-screen" class="screen overlay hidden">
+    <h2 class="ov-title">📦 PETI MISTERIUS!</h2>
+    <p class="overlay-sub" id="chest-sub">Kamu mendapat peti misterius!</p>
+    <div id="chest-box" class="chest-box">🎁</div>
+    <div id="chest-result" class="chest-result hidden"></div>
+    <button id="btn-chest-open" class="btn-main">BUKA PETI!</button>
+    <button id="btn-chest-close" class="btn-dark hidden">Tutup</button>
+  </div>
+
+  <!-- ===== PROFIL ===== -->
+  <div id="profile-screen" class="screen overlay hidden">
+    <h2 class="ov-title">👤 PROFIL</h2>
+    <div class="panel-list profile-panel">
+      <div class="stats-grid" id="stats-grid"></div>
+      <p class="section-h">⚡ Upgrade Power-up</p>
+      <div id="upgrade-list"></div>
+    </div>
+    <button id="btn-profile-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== PERINGKAT ===== -->
+  <div id="board-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🏅 PERINGKAT</h2>
+    <p class="overlay-sub">10 lari terbaikmu</p>
+    <div id="board-list" class="panel-list"></div>
+    <button id="btn-board-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toasts"></div>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
