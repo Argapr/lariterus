@@ -1790,14 +1790,24 @@ function refreshMenu() {
 
   // Pratinjau 3D langsung + pilih otomatis jika sudah dimiliki
   if (menuState.tab === 'tema') {
+    trailFX.previewId = null;
+    applyPet(); // kembalikan pet yang sedang dipakai
     buildTheme(it);
     if (owned) store.themeId = it.id;
   } else if (menuState.tab === 'koleksi') {
-    if (owned) {
-      if (it.kind === 'pet') { store.petId = it.id; applyPet(); }
-      else store.trailId = it.id;
+    // Karakter tetap tampil; pet/trail yang disorot dipratinjau walau terkunci
+    if (it.kind === 'pet') {
+      applyPet(it.id);
+      trailFX.previewId = null;
+      if (owned) { store.petId = it.id; }
+    } else {
+      applyPet();                 // tampilkan pet aktif sebagai pendamping
+      trailFX.previewId = it.id;  // pratinjau efek trail
+      if (owned) { store.trailId = it.id; }
     }
   } else {
+    trailFX.previewId = null;
+    applyPet();
     setCharacter(it);
     if (owned) store.charId = it.id;
   }
@@ -2105,8 +2115,11 @@ function updatePlayer(dt) {
     if (petMesh.userData.anim) petMesh.userData.anim(t);
   }
 
-  // Partikel trail saat berlari di tanah
-  if (game.state === 'playing' && game.y <= 0.01 && game.sliding <= 0) {
+  // Partikel trail saat berlari di tanah (gameplay),
+  // atau saat memratinjau trail di tab Koleksi (menu)
+  const emitTrail = (game.state === 'playing' && game.y <= 0.01 && game.sliding <= 0)
+    || (game.state === 'menu' && menuState.tab === 'koleksi' && trailFX.previewId);
+  if (emitTrail) {
     trailFX.timer -= dt;
     if (trailFX.timer <= 0) {
       trailFX.timer = 0.045;
@@ -2170,8 +2183,9 @@ function updateCamera(dt) {
   let cx = game.laneX * 0.45;
   let cy = 4.1, cz = 6.4;
   if (game.state === 'menu') {
-    if (menuState.tab === 'tema') { cx = 0; cy = 4.6; cz = 7.5; } // seperti gameplay: pamerkan dunia
-    else { cx = 0; cy = 1.65; cz = -3.7; }                        // dari depan: karakter di tengah
+    if (menuState.tab === 'tema') { cx = 0; cy = 4.6; cz = 7.5; }        // seperti gameplay: pamerkan dunia
+    else if (menuState.tab === 'koleksi') { cx = 0; cy = 3.3; cz = 5.6; } // dari belakang: pet & trail seperti saat main
+    else { cx = 0; cy = 1.65; cz = -3.7; }                              // dari depan: karakter di tengah
   }
   if (game.shake > 0) {
     game.shake -= dt;
@@ -2180,7 +2194,11 @@ function updateCamera(dt) {
   }
   camera.position.lerp(new THREE.Vector3(cx, cy, cz), Math.min(1, dt * 5));
   const menuChar = game.state === 'menu' && menuState.tab !== 'tema';
-  camera.lookAt(menuChar ? new THREE.Vector3(0, 1.15, 0) : new THREE.Vector3(game.laneX * 0.3, 1.3, -5));
+  const lookTarget = game.state === 'menu' && menuState.tab === 'koleksi'
+    ? new THREE.Vector3(0.15, 1.2, -3)   // ke depan seperti gameplay
+    : menuChar ? new THREE.Vector3(0, 1.15, 0)
+    : new THREE.Vector3(game.laneX * 0.3, 1.3, -5);
+  camera.lookAt(lookTarget);
 }
 
 // Efek visual & indikator HUD power-up
@@ -2226,6 +2244,7 @@ function tick(now) {
     moveWorld(dt * 0.6);
     game.nextSpawn = game.distance + 999;
     updatePlayer(dt);
+    trailFX.update(dt, game.speed * dt * 0.6); // pratinjau trail koleksi ikut bergerak
     // Kamera menu ada di depan karakter — cukup goyangan kecil agar wajah terlihat
     game.charMesh.rotation.y = Math.sin(now * 0.0006) * 0.3;
   } else if (game.state === 'gameover') {
