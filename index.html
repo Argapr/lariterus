@@ -89,9 +89,26 @@
     <div class="hud-top">
       <div class="hud-box" id="hud-score">0</div>
       <div class="hud-box hud-coins">🪙 <span id="hud-coins-val">0</span></div>
+      <div id="hud-mult" class="hud-mult hidden">x2</div>
       <button id="btn-pause" class="btn-icon">⏸</button>
     </div>
     <div id="powerups"></div>
+    <div id="event-banner" class="event-banner hidden"></div>
+    <div id="popups"></div>
+  </div>
+
+  <!-- ===== REVIVE ===== -->
+  <div id="revive-screen" class="screen overlay hidden">
+    <h2 class="ov-title">SEKALI LAGI?</h2>
+    <div class="revive-ring">
+      <svg viewBox="0 0 120 120">
+        <circle class="revive-track" cx="60" cy="60" r="52"/>
+        <circle id="revive-arc" class="revive-arc" cx="60" cy="60" r="52"/>
+      </svg>
+      <div id="revive-count" class="revive-count">5</div>
+    </div>
+    <button id="btn-revive" class="btn-main">❤️&nbsp; LANJUT — 🪙 <span id="revive-cost">200</span></button>
+    <button id="btn-revive-give" class="btn-dark">Menyerah</button>
   </div>
 
   <!-- ===== PAUSE ===== -->

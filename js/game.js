@@ -21,6 +21,19 @@ const POWER_INFO = {
   rocket: { icon: '🚀', name: 'Roket' },
 };
 
+// Revive: biaya menggandakan tiap kali dalam satu lari (maks 3x)
+const REVIVE_BASE = 200;
+const REVIVE_MAX = 3;
+const REVIVE_SECONDS = 5;      // waktu memutuskan
+const REVIVE_INVULN = 2.2;     // kebal sesaat setelah bangkit
+
+// Multiplier: naik tiap ambang jarak (skor per meter × multiplier)
+const MULT_STEPS = [0, 250, 550, 950, 1500]; // ambang untuk x1..x5
+
+// Event lintasan
+const EVENT_GAP = [700, 1100];  // jarak antar event (acak dalam rentang)
+const EVENT_DURATION = 12;      // detik
+
 // ---------- Hadiah login harian (siklus 7 hari) ----------
 const LOGIN_REWARDS = [
   { coins: 50 }, { coins: 75 }, { coins: 100 }, { coins: 150 },
@@ -1098,6 +1111,21 @@ function spawnObstacle(type, lane, z) {
   } else if (type === 'block') {
     mesh = new THREE.Mesh(geoms.crate, mats.crate);
     mesh.position.set(LANES[lane], 1.15, z);
+  } else if (type === 'mover') {
+    // Bola berduri yang bergeser ke lajur pemain saat mendekat
+    mesh = new THREE.Group();
+    const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0), toon(0x8a4030));
+    mesh.add(ball);
+    for (let i = 0; i < 10; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.34, 6), toon(0xcaa070));
+      const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI - Math.PI / 2;
+      spike.position.set(Math.cos(a) * Math.cos(b) * 0.7, Math.sin(b) * 0.7, Math.sin(a) * Math.cos(b) * 0.7);
+      spike.lookAt(spike.position.clone().multiplyScalar(2));
+      spike.rotateX(Math.PI / 2);
+      mesh.add(spike);
+    }
+    mesh.userData.ball = ball;
+    mesh.position.set(LANES[lane], 0.7, z);
   } else { // overhang
     mesh = new THREE.Group();
     for (const sx of [-1.05, 1.05]) {
@@ -1190,18 +1218,26 @@ function spawnPowerup(lane, z) {
 
 // ---------- Pola spawn ----------
 function spawnPattern(z) {
+  // Saat event aktif, pola diambil alih oleh event
+  if (game.event) { spawnEventPattern(z); return; }
+
   const lanes = [0, 1, 2].sort(() => Math.random() - 0.5);
   const r = Math.random();
-  if (r < 0.28) {
+  // Rintangan bergerak mulai muncul setelah 400 m
+  if (game.distance > 400 && r < 0.14) {
+    spawnObstacle('mover', lanes[0], z);
+    for (let i = 0; i < 3; i++) spawnCoin(lanes[1], z - i * 1.6);
+    for (let i = 0; i < 3; i++) spawnCoin(lanes[2], z - i * 1.6);
+  } else if (r < 0.28) {
     spawnObstacle('barrier', lanes[0], z);
     for (let i = -2; i <= 2; i++)
       spawnCoin(lanes[0], z + i * 1.4, 1.0 + Math.max(0, 1.1 - Math.abs(i) * 0.45));
     for (let i = 0; i < 3; i++) spawnCoin(lanes[1], z - i * 1.6);
-  } else if (r < 0.52) {
+  } else if (r < 0.5) {
     spawnObstacle('block', lanes[0], z);
     spawnObstacle('barrier', lanes[1], z);
     for (let i = 0; i < 4; i++) spawnCoin(lanes[2], z + 2 - i * 1.6);
-  } else if (r < 0.72) {
+  } else if (r < 0.7) {
     spawnObstacle('overhang', lanes[0], z);
     spawnObstacle('overhang', lanes[1], z);
     for (let i = 0; i < 3; i++) spawnCoin(lanes[0], z - 1 - i * 1.4, 0.75);
@@ -1216,11 +1252,120 @@ function spawnPattern(z) {
   // Sesekali muncul power-up di lajur yang tidak terhalang block
   if (Math.random() < 0.16) {
     const blocked = world.obstacles
-      .filter(o => o.type === 'block' && Math.abs(o.mesh.position.z - z) < 8)
+      .filter(o => (o.type === 'block' || o.type === 'mover') && Math.abs(o.mesh.position.z - z) < 8)
       .map(o => o.lane);
     const free = [0, 1, 2].filter(l => !blocked.includes(l));
-    spawnPowerup(free[(Math.random() * free.length) | 0], z - 9);
+    if (free.length) spawnPowerup(free[(Math.random() * free.length) | 0], z - 9);
   }
+}
+
+// ============================================================
+// Event lintasan
+// ============================================================
+const EVENTS = {
+  coin_rain: { banner: '☔ HUJAN KOIN!', color: '#ffd34d' },
+  chase:     { banner: '🏃 DIKEJAR!',    color: '#ff5a5a' },
+  narrow:    { banner: '↔️ LINTASAN SEMPIT!', color: '#8ae6ff' },
+};
+
+function startEvent(type) {
+  game.event = { type, timeLeft: EVENT_DURATION, narrowLane: 0 };
+  showBanner(EVENTS[type].banner, EVENTS[type].color);
+  if (type === 'chase') {
+    game.speed = Math.min(MAX_SPEED, game.speed + 3);
+    spawnChaser();
+  } else if (type === 'narrow') {
+    // Lajur yang diblokir tetap sepanjang event (kiri atau kanan)
+    game.event.narrowLane = Math.random() < 0.5 ? 0 : 2;
+  }
+}
+
+function endEvent() {
+  if (game.chaser) { world.group.remove(game.chaser); game.chaser = null; }
+  if (game.event && game.event.type === 'chase' && game.state === 'playing') {
+    // Bonus bertahan dari kejaran
+    game.coins += 15;
+    popup('+15 🪙 SELAMAT!');
+  }
+  game.event = null;
+}
+
+function spawnChaser() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 14), toon(0x6a2a8a));
+  body.scale.set(1, 0.85, 1);
+  g.add(body);
+  // Mata besar menyala
+  for (const sx of [-0.5, 0.5]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffee44 }));
+    eye.position.set(sx, 0.5, -1.1);
+    g.add(eye);
+    const pup = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), new THREE.MeshBasicMaterial({ color: 0x201000 }));
+    pup.position.set(sx, 0.5, -1.35);
+    g.add(pup);
+  }
+  // Gigi
+  for (let i = 0; i < 6; i++) {
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 6), toon(0xffffff));
+    t.position.set(-0.6 + i * 0.24, -0.35, -1.15);
+    t.rotation.x = Math.PI;
+    g.add(t);
+  }
+  g.scale.setScalar(0.8);
+  g.position.set(0, 1.35, 2.8); // di belakang pemain (z0), sebelum kamera (z6.4)
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  world.group.add(g);
+  game.chaser = g;
+}
+
+function spawnEventPattern(z) {
+  const ev = game.event;
+  if (ev.type === 'coin_rain') {
+    // Koin melimpah di semua lajur, tanpa rintangan
+    for (let l = 0; l < 3; l++)
+      for (let j = 0; j < 4; j++)
+        if (Math.random() < 0.8) spawnCoin(l, z - j * 1.5, 0.9 + Math.sin((l + j)) * 0.3 + 0.4);
+  } else if (ev.type === 'chase') {
+    // Rintangan lebih rapat, tetap sisakan satu jalur
+    const lanes = [0, 1, 2].sort(() => Math.random() - 0.5);
+    const types = ['barrier', 'block', 'overhang'];
+    spawnObstacle(types[(Math.random() * 3) | 0], lanes[0], z);
+    if (Math.random() < 0.6) spawnObstacle(types[(Math.random() * 3) | 0], lanes[1], z - 1);
+    for (let i = 0; i < 3; i++) spawnCoin(lanes[2], z - i * 1.5);
+  } else if (ev.type === 'narrow') {
+    // Dinding di satu sisi + rintangan di dua lajur tersisa
+    const wallLane = ev.narrowLane;
+    spawnObstacle('block', wallLane, z);
+    const others = [0, 1, 2].filter(l => l !== wallLane);
+    if (Math.random() < 0.6) {
+      const t = ['barrier', 'overhang'][(Math.random() * 2) | 0];
+      spawnObstacle(t, others[(Math.random() * others.length) | 0], z);
+    }
+    for (const l of others) if (Math.random() < 0.5) spawnCoin(l, z, 0.9);
+  }
+}
+
+function showBanner(text, color) {
+  const el = $('event-banner');
+  el.textContent = text;
+  el.style.color = color;
+  el.classList.remove('hidden', 'out');
+  void el.offsetWidth; // restart animasi
+  el.classList.add('shown');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => el.classList.add('hidden'), 500);
+  }, 1600);
+}
+
+function popup(text) {
+  const el = document.createElement('div');
+  el.className = 'popup';
+  el.textContent = text;
+  const box = $('popups');
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 950);
 }
 
 // ============================================================
@@ -1239,10 +1384,22 @@ const game = {
   nextDeco: 7,
   coins: 0,
   score: 0,
+  scoreAcc: 0,      // akumulator skor pecahan (jarak × multiplier)
   time: 0,
   shake: 0,
   power: { magnet: 0, shield: 0, rocket: 0 },
   runPowerups: 0,
+  // Revive
+  revives: 0,
+  invuln: 0,
+  reviveTimer: 0,
+  // Combo & multiplier
+  mult: 1,
+  nearMiss: 0,      // total near-miss dalam lari
+  // Event lintasan
+  event: null,      // { type, timeLeft } | null
+  nextEvent: 0,
+  chaser: null,
 };
 
 function setCharacter(cfg) {
@@ -1279,6 +1436,7 @@ function resetRun() {
   clearList(world.coins);
   clearList(world.powerups);
   trailFX.clear();
+  endEvent(); // bersihkan chaser & efek event
   game.power = { magnet: 0, shield: 0, rocket: 0 };
   game.runPowerups = 0;
   game.lane = 1; game.laneX = 0;
@@ -1289,11 +1447,21 @@ function resetRun() {
   game.nextSpawn = 35;
   game.coins = 0;
   game.score = 0;
+  game.scoreAcc = 0;
   game.time = 0;
   game.shake = 0;
+  game.revives = 0;
+  game.invuln = 0;
+  game.reviveTimer = 0;
+  game.mult = 1;
+  game.nearMiss = 0;
+  game.event = null;
+  game.nextEvent = randRange(EVENT_GAP[0] * 0.6, EVENT_GAP[1] * 0.6); // event pertama lebih cepat
   game.charMesh.rotation.set(0, 0, 0);
   game.charMesh.position.set(0, 0, 0);
 }
+
+const randRange = (a, b) => a + Math.random() * (b - a);
 
 // ---------- Input ----------
 function doJump() {
@@ -1727,6 +1895,7 @@ const screens = {
   missions: $('missions-screen'), board: $('board-screen'),
   daily: $('daily-screen'), wheel: $('wheel-screen'),
   chest: $('chest-screen'), profile: $('profile-screen'),
+  revive: $('revive-screen'),
 };
 
 function showScreen(...names) {
@@ -1866,6 +2035,10 @@ function startGame() {
     store.vouchers = v;
     toast(`Voucher aktif: ${used.join(' ')}`);
   }
+  // Bersihkan sisa UI dari lari sebelumnya
+  $('hud-mult').classList.add('hidden');
+  $('event-banner').classList.add('hidden');
+  $('popups').innerHTML = '';
   game.state = 'playing';
   showScreen('hud');
 }
@@ -1886,10 +2059,65 @@ function backToMenu() {
   refreshMenu();
   maybeShowChest(); // peti menunggu? tawarkan buka
 }
-function gameOver() {
+// Dipanggil saat menabrak: tawarkan revive bila masih memungkinkan
+function die() {
+  const cost = REVIVE_BASE * Math.pow(2, game.revives);
+  if (game.revives < REVIVE_MAX && store.coinsTotal >= cost) {
+    offerRevive(cost);
+  } else {
+    finalizeRun();
+  }
+}
+
+function offerRevive(cost) {
+  game.state = 'revive';
+  game.reviveTimer = REVIVE_SECONDS;
+  game.shake = 0.4;
+  AudioFX.crash();
+  $('revive-cost').textContent = cost;
+  $('btn-revive').style.opacity = 1;
+  updateReviveUI();
+  showScreen('hud', 'revive');
+}
+
+function updateReviveUI() {
+  const frac = game.reviveTimer / REVIVE_SECONDS;
+  $('revive-count').textContent = Math.ceil(game.reviveTimer);
+  $('revive-arc').style.strokeDashoffset = (327 * (1 - frac)).toFixed(1);
+}
+
+function acceptRevive() {
+  const cost = REVIVE_BASE * Math.pow(2, game.revives);
+  if (store.coinsTotal < cost) { finalizeRun(); return; }
+  store.coinsTotal -= cost;
+  game.revives++;
+  game.invuln = REVIVE_INVULN;
+  game.power.shield = Math.max(game.power.shield, 2.5); // shield singkat penanda kebal
+  // Bersihkan rintangan di sekitar & di depan agar aman mendarat
+  for (let i = world.obstacles.length - 1; i >= 0; i--) {
+    if (world.obstacles[i].z > -22) {
+      world.group.remove(world.obstacles[i].mesh);
+      world.obstacles.splice(i, 1);
+    }
+  }
+  game.lane = 1; // kembali ke tengah
+  AudioFX.powerup();
+  popup('BANGKIT! 💪');
+  game.state = 'playing';
+  showScreen('hud');
+}
+
+function declineRevive() {
+  AudioFX.click();
+  finalizeRun();
+}
+
+function finalizeRun() {
   game.state = 'gameover';
   AudioFX.crash();
   game.shake = 0.5;
+  endEvent();
+  if (game.chaser) { world.group.remove(game.chaser); game.chaser = null; }
   const isRecord = game.score > store.best;
   if (isRecord) store.best = game.score;
 
@@ -1966,6 +2194,8 @@ $('btn-play').addEventListener('click', () => {
   if (tryBuy(it, ownedKey)) refreshMenu();
   else refreshMenu();
 });
+$('btn-revive').addEventListener('click', acceptRevive);
+$('btn-revive-give').addEventListener('click', declineRevive);
 $('btn-restart').addEventListener('click', () => { AudioFX.click(); startGame(); });
 $('btn-menu').addEventListener('click', backToMenu);
 $('btn-pause').addEventListener('click', () => { AudioFX.click(); pauseGame(); });
@@ -2017,6 +2247,22 @@ function moveWorld(dt) {
     const o = world.obstacles[i];
     o.mesh.position.z += dz;
     o.z = o.mesh.position.z;
+    // Rintangan bergerak: geser ke lajur pemain saat mendekat, lalu berputar
+    if (o.type === 'mover') {
+      if (o.z > -18 && o.z < -1) {
+        o.lane = game.lane; // kunci ke lajur pemain
+        o.mesh.position.x += (LANES[o.lane] - o.mesh.position.x) * Math.min(1, dt * 2.4);
+      }
+      if (o.mesh.userData.ball) o.mesh.userData.ball.rotation.x += dz * 0.5;
+    }
+    // Near-miss: rintangan melewati pemain tanpa menabrak
+    if (game.state === 'playing' && !o.passed && o.z > 0.6) {
+      o.passed = true;
+      if (game.invuln <= 0) {
+        const dx = Math.abs(o.mesh.position.x - game.laneX);
+        if (dx < 2.5) registerNearMiss(); // lajur sama (lompat/slide) atau lajur sebelah
+      }
+    }
     if (o.z > DESPAWN_Z) { world.group.remove(o.mesh); world.obstacles.splice(i, 1); }
   }
   for (let i = world.coins.length - 1; i >= 0; i--) {
@@ -2056,14 +2302,47 @@ function moveWorld(dt) {
     pos.needsUpdate = true;
   }
 
+  // Jadwal & pembaruan event lintasan
+  if (game.state === 'playing') {
+    if (!game.event && game.distance > game.nextEvent) {
+      const types = Object.keys(EVENTS);
+      startEvent(types[(Math.random() * types.length) | 0]);
+    }
+    if (game.event) {
+      game.event.timeLeft -= dt;
+      if (game.event.timeLeft <= 0) {
+        endEvent();
+        game.nextEvent = game.distance + randRange(EVENT_GAP[0], EVENT_GAP[1]);
+      }
+    }
+    // Chaser bergoyang mengikuti pemain di belakang
+    if (game.chaser) {
+      game.chaser.position.x += (game.laneX - game.chaser.position.x) * Math.min(1, dt * 3);
+      game.chaser.position.z = 2.8 + Math.sin(performance.now() * 0.006) * 0.4;
+      game.chaser.position.y = 1.35 + Math.abs(Math.sin(performance.now() * 0.012)) * 0.3;
+      game.chaser.rotation.z = Math.sin(performance.now() * 0.012) * 0.1;
+    }
+  }
+
+  const spawnGap = game.event ? (game.event.type === 'coin_rain' ? 7 : 11) : (16 + Math.random() * 10);
   if (game.distance > game.nextSpawn) {
     spawnPattern(SPAWN_Z);
-    game.nextSpawn = game.distance + 16 + Math.random() * 10;
+    game.nextSpawn = game.distance + spawnGap;
   }
   if (game.distance > game.nextDeco) {
     spawnDeco(SPAWN_Z - Math.random() * 8);
     game.nextDeco = game.distance + 6;
   }
+}
+
+// Near-miss: tambah combo, bonus skor, sesekali koin
+function registerNearMiss() {
+  game.nearMiss++;
+  const bonus = 5 * game.mult;
+  game.scoreAcc += bonus;
+  popup(`NYARIS! +${bonus}`);
+  if (Math.random() < 0.4) { game.coins++; }
+  AudioFX.beep(900, 0.08, 'square', 0.05, 200);
 }
 
 function updatePlayer(dt) {
@@ -2151,16 +2430,20 @@ function checkCollisions() {
       AudioFX.powerup();
     }
   }
+  if (game.invuln > 0) return false; // kebal sesaat setelah bangkit
   for (let i = world.obstacles.length - 1; i >= 0; i--) {
     const o = world.obstacles[i];
-    const depth = o.type === 'block' ? 1.0 : 0.5;
+    const depth = (o.type === 'block' || o.type === 'mover') ? 1.0 : 0.5;
     if (Math.abs(o.z) > depth / 2 + 0.35) continue;
-    if (Math.abs(LANES[o.lane] - px) > 1.1) continue;
+    const ox = o.type === 'mover' ? o.mesh.position.x : LANES[o.lane];
+    if (Math.abs(ox - px) > 1.1) continue;
     let hit = false;
     if (o.type === 'barrier') {
       hit = game.y < 0.75;
     } else if (o.type === 'overhang') {
       hit = game.sliding <= 0 && game.y < 2.0; // lompatan roket bisa melewatinya
+    } else if (o.type === 'mover') {
+      hit = game.y < 1.6; // bola besar; lompatan roket bisa melewatinya
     } else {
       hit = game.y < 2.3; // block pun bisa dilompati dengan roket
     }
@@ -2202,6 +2485,18 @@ function updateCamera(dt) {
 }
 
 // Efek visual & indikator HUD power-up
+function updateMultUI() {
+  const el = $('hud-mult');
+  if (game.mult > 1) {
+    el.textContent = 'x' + game.mult;
+    el.classList.remove('hidden');
+    el.classList.add('bump');
+    setTimeout(() => el.classList.remove('bump'), 160);
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
 function updatePowerFX() {
   const ud = game.charMesh.userData;
   if (ud.shieldBubble) ud.shieldBubble.visible = game.power.shield > 0;
@@ -2230,15 +2525,29 @@ function tick(now) {
   if (game.state === 'playing') {
     game.time += dt;
     game.speed = Math.min(MAX_SPEED, BASE_SPEED + game.time * 0.35);
+    if (game.invuln > 0) game.invuln = Math.max(0, game.invuln - dt);
     for (const k in game.power) game.power[k] = Math.max(0, game.power[k] - dt);
     moveWorld(dt);
     updatePlayer(dt);
     trailFX.update(dt, game.speed * dt);
-    if (checkCollisions()) gameOver();
-    game.score = Math.floor(game.distance) + game.coins * 10;
+    if (checkCollisions()) die();
+    // Multiplier dari jarak + akumulasi skor
+    const prevMult = game.mult;
+    let m = 1;
+    for (const step of MULT_STEPS) if (game.distance >= step) m++;
+    game.mult = Math.min(5, m - 1) || 1;
+    game.scoreAcc += game.speed * dt * game.mult;
+    game.score = Math.floor(game.scoreAcc) + game.coins * 10;
     $('hud-score').textContent = game.score;
     $('hud-coins-val').textContent = game.coins;
+    if (game.mult !== prevMult) updateMultUI();
     updatePowerFX();
+  } else if (game.state === 'revive') {
+    // Dunia tetap "diam" sementara pemain memutuskan; hitung mundur
+    game.reviveTimer -= dt;
+    updateReviveUI();
+    updatePlayer(dt * 0.15); // animasi pelan
+    if (game.reviveTimer <= 0) finalizeRun();
   } else if (game.state === 'menu') {
     game.speed = 4;
     moveWorld(dt * 0.6);
@@ -2271,4 +2580,4 @@ if (!dailyInfo().claimedToday) { renderDaily(); showScreen('menu', 'daily'); }
 requestAnimationFrame(tick);
 
 // Handle debug untuk inspeksi dari luar modul
-window.__dbg = { renderer, scene, camera, game, world, updatePlayer, updateCamera, spawnPattern, spawnCoin, spawnObstacle, spawnPowerup, updatePowerFX, buildTheme, setCharacter, refreshMenu, getMissions, applyRunToMissions, renderMissions, renderBoard, saveToBoard, THEMES, CHARACTERS, PETS, TRAILS, store, toast, checkCollisions, gameOver, moveWorld, dailyInfo, claimDaily, renderDaily, spinWheel, renderWheel, openChest, maybeShowChest, checkAchievements, achValues, renderProfile, buyUpgrade, applyPet, buildPetMesh, trailFX, powerDuration, levelInfo, setTab, carouselGo };
+window.__dbg = { renderer, scene, camera, game, world, updatePlayer, updateCamera, spawnPattern, spawnCoin, spawnObstacle, spawnPowerup, updatePowerFX, buildTheme, setCharacter, refreshMenu, getMissions, applyRunToMissions, renderMissions, renderBoard, saveToBoard, THEMES, CHARACTERS, PETS, TRAILS, store, toast, checkCollisions, die, finalizeRun, offerRevive, acceptRevive, declineRevive, startEvent, endEvent, registerNearMiss, updateMultUI, moveWorld, dailyInfo, claimDaily, renderDaily, spinWheel, renderWheel, openChest, maybeShowChest, checkAchievements, achValues, renderProfile, buyUpgrade, applyPet, buildPetMesh, trailFX, powerDuration, levelInfo, setTab, carouselGo };
