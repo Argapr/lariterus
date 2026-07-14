@@ -56,7 +56,10 @@
     </div>
 
     <div class="menu-bottom">
-      <button id="btn-play" class="btn-main">▷&nbsp; MAIN</button>
+      <div class="play-row">
+        <button id="btn-play" class="btn-main">▷&nbsp; MAIN</button>
+        <button id="btn-adventure" class="btn-adventure">🗺️<span>PETUALANGAN</span></button>
+      </div>
       <div id="car-dots" class="dots"></div>
     </div>
 
@@ -198,6 +201,83 @@
     <p class="overlay-sub">10 lari terbaikmu</p>
     <div id="board-list" class="panel-list"></div>
     <button id="btn-board-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== PETA STAGE ===== -->
+  <div id="map-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🗺️ PETUALANGAN</h2>
+    <p class="overlay-sub">Taklukkan bos di ujung tiap stage</p>
+    <div class="adv-bar">
+      <div class="coin-pill">🪙 <span id="map-coins">0</span></div>
+      <button id="btn-arsenal" class="btn-dark small">🔫 <span id="map-weapon">Blaster</span></button>
+    </div>
+    <div id="stage-list" class="stage-list"></div>
+    <button id="btn-map-close" class="btn-dark">Tutup</button>
+  </div>
+
+  <!-- ===== ARSENAL (SENJATA) ===== -->
+  <div id="arsenal-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🔫 ARSENAL</h2>
+    <p class="overlay-sub">Beli & tingkatkan senjata, lalu pasang</p>
+    <div class="adv-bar"><div class="coin-pill">🪙 <span id="arsenal-coins">0</span></div></div>
+    <div id="weapon-list" class="panel-list"></div>
+    <button id="btn-arsenal-close" class="btn-dark">Kembali</button>
+  </div>
+
+  <!-- ===== DETAIL STAGE ===== -->
+  <div id="stage-screen" class="screen overlay hidden">
+    <h2 class="ov-title" id="stage-title">Stage</h2>
+    <div class="go-card">
+      <div id="stage-boss" class="stage-boss"></div>
+      <div class="go-stats">
+        <div class="go-stat">
+          <div class="go-label">Jarak Lari</div>
+          <div class="go-val"><span id="stage-dist">0</span> <small>m</small></div>
+        </div>
+        <div class="go-sep"></div>
+        <div class="go-stat">
+          <div class="go-label">Senjata</div>
+          <div class="go-val" id="stage-weapon">🔫</div>
+        </div>
+      </div>
+    </div>
+    <button id="btn-stage-start" class="btn-main">▷&nbsp; MULAI LARI</button>
+    <button id="btn-stage-weapon" class="btn-dark">🔫 Ganti Senjata</button>
+    <button id="btn-stage-close" class="btn-dark">Kembali ke Peta</button>
+  </div>
+
+  <!-- ===== PRA-BOS ===== -->
+  <div id="preboss-screen" class="screen overlay hidden">
+    <h2 class="ov-title">⚔️ BOS DI DEPAN!</h2>
+    <p class="overlay-sub">Beli satu boost dari koin larimu — 🪙 <span id="preboss-coins">0</span></p>
+    <div id="boost-list" class="boost-list"></div>
+    <button id="btn-boss-start" class="btn-main">⚔️&nbsp; LAWAN BOS</button>
+  </div>
+
+  <!-- ===== HUD TEMPUR BOS ===== -->
+  <div id="bosshud" class="screen hidden">
+    <div class="boss-top">
+      <div class="boss-name" id="boss-name">Bos</div>
+      <div class="boss-hp"><div id="boss-hp-fill"></div></div>
+    </div>
+    <div class="player-hearts" id="player-hearts"></div>
+    <div class="boss-hint">Geser layar untuk bergerak · tembak otomatis</div>
+  </div>
+
+  <!-- ===== MENANG ===== -->
+  <div id="victory-screen" class="screen overlay hidden">
+    <h2 class="ov-title">🏆 MENANG!</h2>
+    <div id="victory-msg" class="go-note"></div>
+    <div class="best-pill">🪙 +<span id="victory-coins">0</span> masuk dompet</div>
+    <button id="btn-victory-next" class="btn-main">Lanjut ke Peta</button>
+  </div>
+
+  <!-- ===== KALAH ===== -->
+  <div id="defeat-screen" class="screen overlay hidden">
+    <h2 class="ov-title">💀 KALAH</h2>
+    <div id="defeat-msg" class="go-note">Coba lagi!</div>
+    <button id="btn-defeat-retry" class="btn-main">⟳&nbsp; Coba Lagi</button>
+    <button id="btn-defeat-map" class="btn-dark">Ke Peta</button>
   </div>
 
   <!-- ===== TOAST ===== -->

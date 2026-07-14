@@ -119,6 +119,46 @@ const THEMES = [
     hemi: [0xffe0c0, 0xc0a070, 0.95], sun: [0xffb066, 2.2], sunPos: [10, 12, -16] },
 ];
 
+// ============================================================
+// MODE PETUALANGAN — senjata, stage, bos, boost pra-tempur
+// ============================================================
+// ---------- Senjata (price 0 = gratis; upgrade menaikkan damage) ----------
+const WEAPONS = [
+  { id: 'blaster', name: 'Blaster', desc: 'Senjata dasar — tembakan lurus', icon: '🔫', price: 0,
+    damage: 9,  fireRate: 2.6, projSpeed: 28, projColor: 0xffe066, pellets: 1, spread: 0 },
+  { id: 'spread',  name: 'Penyebar', desc: 'Tiga peluru menyebar', icon: '🔱', price: 800,
+    damage: 6,  fireRate: 1.9, projSpeed: 25, projColor: 0x7ee0ff, pellets: 3, spread: 0.26 },
+  { id: 'rapid',   name: 'Rentetan', desc: 'Tembakan cepat tanpa henti', icon: '⚡', price: 1400,
+    damage: 4,  fireRate: 8,   projSpeed: 32, projColor: 0xffa64d, pellets: 1, spread: 0.06 },
+  { id: 'cannon',  name: 'Meriam', desc: 'Lambat tapi damage besar', icon: '💥', price: 2200,
+    damage: 34, fireRate: 0.95, projSpeed: 22, projColor: 0xff5a5a, pellets: 1, spread: 0 },
+];
+const WEAPON_UPGRADE_MAX = 5;
+const weaponUpgradeCost = (lvl) => 300 * lvl;            // biaya menuju level berikutnya
+function weaponDamage(w) {
+  const lvl = store.weaponUpgrades[w.id] || 1;
+  return w.damage * (1 + 0.2 * (lvl - 1));               // +20% damage per level
+}
+
+// ---------- Boost sekali-pakai sebelum bos (dibeli pakai koin run saat itu) ----------
+const BATTLE_BOOSTS = [
+  { id: 'heart',  icon: '❤️', name: '+2 Nyawa',   desc: 'Mulai tempur dengan 2 nyawa ekstra', cost: 150 },
+  { id: 'power',  icon: '💪', name: 'Damage ×1.5', desc: 'Serangan lebih kuat sepanjang tempur', cost: 220 },
+  { id: 'shield', icon: '🛡️', name: 'Perisai',    desc: 'Tahan 3 serangan bos pertama',        cost: 180 },
+];
+
+// ---------- Stage: lari sampai jarak target, lalu lawan bos ----------
+const STAGES = [
+  { id: 'st1', name: 'Taman Awal',   theme: 'kota',   distance: 450,
+    boss: { name: 'Golem Rimba',       hp: 120, color: 0x4a8f3c, accent: 0xe0653a, horns: 2 } },
+  { id: 'st2', name: 'Gurun Terik',  theme: 'gurun',  distance: 650,
+    boss: { name: 'Kalajengking Raja', hp: 210, color: 0xd98a3c, accent: 0x7a3f1f, horns: 3 } },
+  { id: 'st3', name: 'Kota Neon',    theme: 'neon',   distance: 850,
+    boss: { name: 'Bot Penjaga',       hp: 330, color: 0xc400ff, accent: 0x35e0e0, horns: 4 } },
+  { id: 'st4', name: 'Puncak Salju', theme: 'salju',  distance: 1050,
+    boss: { name: 'Raja Yeti',         hp: 480, color: 0xdfeaf5, accent: 0x8fb8dd, horns: 5 } },
+];
+
 // ---------- Penyimpanan ----------
 const jsonGet = (k, def) => {
   try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; }
@@ -164,6 +204,15 @@ const store = {
   set ownedPets(v)  { localStorage.setItem('er_owned_pets', JSON.stringify(v)); },
   get ownedTrails() { return jsonGet('er_owned_trails', ['notrail']); },
   set ownedTrails(v){ localStorage.setItem('er_owned_trails', JSON.stringify(v)); },
+  // Mode Petualangan
+  get ownedWeapons()   { return jsonGet('er_owned_weapons', ['blaster']); },
+  set ownedWeapons(v)  { localStorage.setItem('er_owned_weapons', JSON.stringify(v)); },
+  get weaponUpgrades() { return jsonGet('er_weapon_upg', { blaster: 1 }); },
+  set weaponUpgrades(v){ localStorage.setItem('er_weapon_upg', JSON.stringify(v)); },
+  get equippedWeapon() { return localStorage.getItem('er_equipped_weapon') || 'blaster'; },
+  set equippedWeapon(v){ localStorage.setItem('er_equipped_weapon', v); },
+  get clearedStages()  { return jsonGet('er_cleared_stages', []); },
+  set clearedStages(v) { localStorage.setItem('er_cleared_stages', JSON.stringify(v)); },
 };
 
 // ---------- Audio prosedural ----------
@@ -1400,6 +1449,12 @@ const game = {
   event: null,      // { type, timeLeft } | null
   nextEvent: 0,
   chaser: null,
+  // Mode Petualangan
+  mode: 'endless',  // 'endless' | 'adventure'
+  stageIdx: 0,
+  stageGoal: 0,
+  battleBoost: null, // id boost yang dibeli sebelum bos
+  boss: null,        // objek keadaan tempur (lihat modul bos)
 };
 
 function setCharacter(cfg) {
@@ -1483,6 +1538,14 @@ function doMove(dir) {
 }
 
 window.addEventListener('keydown', (e) => {
+  if (game.state === 'boss') {
+    const c = e.code;
+    if (c === 'ArrowLeft' || c === 'KeyA') bossKeys.add('left');
+    else if (c === 'ArrowRight' || c === 'KeyD') bossKeys.add('right');
+    else if (c === 'ArrowUp' || c === 'KeyW') bossKeys.add('up');
+    else if (c === 'ArrowDown' || c === 'KeyS') bossKeys.add('down');
+    return;
+  }
   if (game.state === 'menu') {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') carouselMove(-1);
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') carouselMove(1);
@@ -1896,6 +1959,10 @@ const screens = {
   daily: $('daily-screen'), wheel: $('wheel-screen'),
   chest: $('chest-screen'), profile: $('profile-screen'),
   revive: $('revive-screen'),
+  // Mode Petualangan
+  map: $('map-screen'), arsenal: $('arsenal-screen'), stage: $('stage-screen'),
+  preboss: $('preboss-screen'), bosshud: $('bosshud'), victory: $('victory-screen'),
+  defeat: $('defeat-screen'),
 };
 
 function showScreen(...names) {
@@ -1910,6 +1977,8 @@ const menuState = {
   themeIdx: Math.max(0, THEMES.findIndex(t => t.id === store.themeId)),
   kolIdx: 0,
   buyArmed: false, // tap pertama tombol BELI = konfirmasi
+  stagePick: 0,        // stage yang sedang dilihat di layar detail
+  arsenalReturn: 'map', // kembali ke 'map' atau 'stage' saat menutup arsenal
 };
 
 function tryBuy(item, ownedKey) {
@@ -2020,6 +2089,7 @@ function setTab(tab) {
 
 function startGame() {
   AudioFX.click();
+  game.mode = 'endless';
   resetRun();
   // Voucher power-up dari roda/peti aktif otomatis di awal lari
   const v = store.vouchers;
@@ -2113,6 +2183,8 @@ function declineRevive() {
 }
 
 function finalizeRun() {
+  // Mode Petualangan: mati di tengah lari = gagal stage (bukan game over endless)
+  if (game.mode === 'adventure') { failStage('Kamu tumbang sebelum mencapai bos!'); return; }
   game.state = 'gameover';
   AudioFX.crash();
   game.shake = 0.5;
@@ -2463,6 +2535,19 @@ function checkCollisions() {
 }
 
 function updateCamera(dt) {
+  // Kamera arena bos: dari atas-belakang, mengikuti pemain, bos tetap terlihat
+  if (game.state === 'boss' && game.boss) {
+    const b = game.boss;
+    let sx = 0, sy = 0;
+    if (game.shake > 0) {
+      game.shake -= dt;
+      sx = (Math.random() - 0.5) * game.shake * 1.2;
+      sy = (Math.random() - 0.5) * game.shake * 1.2;
+    }
+    camera.position.lerp(new THREE.Vector3(b.px * 0.5 + sx, 9 + sy, b.pz + 9.5), Math.min(1, dt * 4));
+    camera.lookAt(b.px * 0.35, 1.4, b.bossZ + 2.5);
+    return;
+  }
   let cx = game.laneX * 0.45;
   let cy = 4.1, cz = 6.4;
   if (game.state === 'menu') {
@@ -2542,6 +2627,10 @@ function tick(now) {
     $('hud-coins-val').textContent = game.coins;
     if (game.mult !== prevMult) updateMultUI();
     updatePowerFX();
+    // Mode Petualangan: capai jarak target → gerbang bos
+    if (game.mode === 'adventure' && game.distance >= game.stageGoal) reachBossGate();
+  } else if (game.state === 'boss') {
+    updateBoss(dt);
   } else if (game.state === 'revive') {
     // Dunia tetap "diam" sementara pemain memutuskan; hitung mundur
     game.reviveTimer -= dt;
@@ -2568,6 +2657,509 @@ function tick(now) {
 }
 
 // ============================================================
+// MODE PETUALANGAN — peta stage, arsenal, pra-bos, tempur arena
+// ============================================================
+
+// ---------- Model bos raksasa (prosedural, toon) ----------
+function buildBoss(cfg) {
+  const g = new THREE.Group();
+  const bodyMat = toon(cfg.color);
+  const accMat = toon(cfg.accent);
+  // Kaki
+  for (const sx of [-0.7, 0.7]) {
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.7, 6, 12), bodyMat);
+    leg.position.set(sx, 0.7, 0); g.add(leg);
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), accMat);
+    foot.scale.set(1, 0.6, 1.3); foot.position.set(sx, 0.25, -0.25); g.add(foot);
+  }
+  // Badan + perut
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.5, 20, 18), bodyMat);
+  body.position.y = 2.3; body.scale.set(1.1, 1.15, 1); g.add(body);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(1.1, 18, 16), accMat);
+  belly.position.set(0, 2.1, -0.55); belly.scale.set(0.9, 0.95, 0.5); g.add(belly);
+  // Lengan
+  const arms = [];
+  for (const sx of [-1.55, 1.55]) {
+    const pivot = new THREE.Group(); pivot.position.set(sx, 2.8, 0);
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.95, 6, 12), bodyMat);
+    arm.position.y = -0.5; pivot.add(arm);
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.44, 12, 10), accMat);
+    fist.position.y = -1.05; pivot.add(fist);
+    g.add(pivot); arms.push(pivot);
+  }
+  // Kepala
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.0, 20, 16), bodyMat);
+  head.position.y = 3.7; g.add(head);
+  for (const sx of [-0.4, 0.4]) { // mata menyala
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffee44 }));
+    eye.position.set(sx, 3.85, -0.85); g.add(eye);
+    const pup = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({ color: 0x300000 }));
+    pup.position.set(sx, 3.82, -1.02); g.add(pup);
+  }
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.26, 0.2), new THREE.MeshBasicMaterial({ color: 0x1a0000 }));
+  mouth.position.set(0, 3.38, -0.9); g.add(mouth);
+  for (let i = 0; i < 4; i++) { // taring
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 6), toon(0xffffff));
+    t.position.set(-0.33 + i * 0.22, 3.3, -0.96); t.rotation.x = Math.PI; g.add(t);
+  }
+  for (let i = 0; i < cfg.horns; i++) { // tanduk
+    const side = i % 2 ? 1 : -1;
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.7, 8), accMat);
+    horn.position.set(side * (0.4 + (i >> 1) * 0.16), 4.4, -0.05 + (i >> 1) * 0.2);
+    horn.rotation.z = side * -0.3; g.add(horn);
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.userData = { arms };
+  return g;
+}
+
+// ---------- Geometri/material proyektil & telegraph (dibagi) ----------
+const shotGeo = new THREE.SphereGeometry(0.16, 10, 8);
+const bShotGeo = new THREE.SphereGeometry(0.3, 12, 10);
+const bShotMat = new THREE.MeshBasicMaterial({ color: 0xff4060 });
+const teleMat = new THREE.MeshBasicMaterial({ color: 0xff3040, transparent: true, opacity: 0.32, side: THREE.DoubleSide });
+
+// ---------- Peta stage ----------
+function stageUnlocked(idx) {
+  if (idx === 0) return true;
+  return store.clearedStages.includes(STAGES[idx - 1].id);
+}
+function openMap() {
+  AudioFX.click();
+  game.state = 'menu';
+  renderMap();
+  showScreen('map');
+}
+function renderMap() {
+  $('map-coins').textContent = store.coinsTotal.toLocaleString('id-ID');
+  const w = WEAPONS.find(x => x.id === store.equippedWeapon) || WEAPONS[0];
+  $('map-weapon').textContent = w.name;
+  $('stage-list').innerHTML = STAGES.map((s, i) => {
+    const unlocked = stageUnlocked(i);
+    const cleared = store.clearedStages.includes(s.id);
+    return `<button class="stage-node${unlocked ? '' : ' locked'}${cleared ? ' cleared' : ''}" data-i="${i}" ${unlocked ? '' : 'disabled'}>
+      <div class="stage-num">${cleared ? '✅' : (unlocked ? i + 1 : '🔒')}</div>
+      <div class="stage-info"><div class="stage-name">${s.name}</div>
+        <div class="stage-sub">Bos: ${s.boss.name} · ${s.distance} m</div></div>
+    </button>`;
+  }).join('');
+  $('stage-list').querySelectorAll('.stage-node').forEach(n => {
+    if (n.disabled) return;
+    n.addEventListener('click', () => { AudioFX.click(); openStage(+n.dataset.i); });
+  });
+}
+
+function openStage(idx) {
+  menuState.stagePick = idx;
+  const s = STAGES[idx];
+  $('stage-title').textContent = `${idx + 1}. ${s.name}`;
+  $('stage-dist').textContent = s.distance;
+  const w = WEAPONS.find(x => x.id === store.equippedWeapon) || WEAPONS[0];
+  $('stage-weapon').textContent = `${w.icon} ${w.name}`;
+  $('stage-boss').innerHTML = `<div class="boss-emoji">👹</div>
+    <div><div class="boss-title">${s.boss.name}</div><div class="boss-hp-note">❤️ HP ${s.boss.hp}</div></div>`;
+  showScreen('stage');
+}
+
+// ---------- Arsenal: beli / upgrade / pasang senjata ----------
+function openArsenal() { AudioFX.click(); renderArsenal(); showScreen('arsenal'); }
+function renderArsenal() {
+  $('arsenal-coins').textContent = store.coinsTotal.toLocaleString('id-ID');
+  const owned = store.ownedWeapons, eq = store.equippedWeapon, upg = store.weaponUpgrades;
+  $('weapon-list').innerHTML = WEAPONS.map(w => {
+    const isOwned = w.price === 0 || owned.includes(w.id);
+    const lvl = upg[w.id] || 1, maxed = lvl >= WEAPON_UPGRADE_MAX, isEq = eq === w.id;
+    const pips = Array.from({ length: WEAPON_UPGRADE_MAX }, (_, i) => `<span class="pip${i < lvl ? ' on' : ''}"></span>`).join('');
+    let actions;
+    if (!isOwned) {
+      actions = `<button class="btn-upgrade" data-buy="${w.id}">🪙 ${w.price}</button>`;
+    } else {
+      actions = `<button class="btn-upgrade${isEq ? ' eqd' : ''}" data-equip="${w.id}" ${isEq ? 'disabled' : ''}>${isEq ? '✓ Terpasang' : 'Pasang'}</button>
+        <button class="btn-upgrade" data-upg="${w.id}" ${maxed ? 'disabled' : ''}>${maxed ? 'MAX' : `⬆ 🪙 ${weaponUpgradeCost(lvl)}`}</button>`;
+    }
+    return `<div class="weapon-row">
+      <div class="weapon-ico">${w.icon}</div>
+      <div class="weapon-info">
+        <div class="weapon-name">${w.name}${isOwned ? '' : ' · 🔒'}</div>
+        <div class="weapon-desc">${w.desc}</div>
+        <div class="weapon-stats">DMG ${Math.round(weaponDamage(w))} · ${w.fireRate}/dtk${w.pellets > 1 ? ` · ×${w.pellets}` : ''}</div>
+        <div class="upgrade-pips">${pips}</div>
+      </div>
+      <div class="weapon-actions">${actions}</div>
+    </div>`;
+  }).join('');
+  const wl = $('weapon-list');
+  wl.querySelectorAll('[data-buy]').forEach(b => b.addEventListener('click', () => buyWeapon(b.dataset.buy)));
+  wl.querySelectorAll('[data-equip]').forEach(b => b.addEventListener('click', () => equipWeapon(b.dataset.equip)));
+  wl.querySelectorAll('[data-upg]').forEach(b => b.addEventListener('click', () => upgradeWeapon(b.dataset.upg)));
+}
+function buyWeapon(id) {
+  const w = WEAPONS.find(x => x.id === id); if (!w) return;
+  if (store.coinsTotal < w.price) { toast(`Koin kurang! Butuh 🪙 ${w.price}`); return; }
+  store.coinsTotal -= w.price;
+  store.ownedWeapons = [...store.ownedWeapons, id];
+  const u = store.weaponUpgrades; if (!u[id]) u[id] = 1; store.weaponUpgrades = u;
+  store.equippedWeapon = id;
+  AudioFX.powerup(); toast(`🎉 ${w.name} dibeli & dipasang!`);
+  renderArsenal();
+}
+function equipWeapon(id) {
+  store.equippedWeapon = id; AudioFX.click();
+  toast(`🔫 ${WEAPONS.find(x => x.id === id).name} dipasang`);
+  renderArsenal();
+}
+function upgradeWeapon(id) {
+  const u = store.weaponUpgrades, lvl = u[id] || 1;
+  if (lvl >= WEAPON_UPGRADE_MAX) return;
+  const cost = weaponUpgradeCost(lvl);
+  if (store.coinsTotal < cost) { toast(`Koin kurang! Butuh 🪙 ${cost}`); return; }
+  store.coinsTotal -= cost; u[id] = lvl + 1; store.weaponUpgrades = u;
+  AudioFX.powerup(); toast(`⬆ ${WEAPONS.find(x => x.id === id).name} level ${lvl + 1}!`);
+  renderArsenal();
+}
+
+// ---------- Mulai lari stage ----------
+function startStage(idx) {
+  AudioFX.click();
+  game.mode = 'adventure';
+  game.stageIdx = idx;
+  const st = STAGES[idx];
+  game.stageGoal = st.distance;
+  game.battleBoost = null;
+  buildTheme(THEMES.find(t => t.id === st.theme) || THEMES[0]);
+  applyPet();
+  resetRun();
+  $('hud-mult').classList.add('hidden');
+  $('event-banner').classList.add('hidden');
+  $('popups').innerHTML = '';
+  game.state = 'playing';
+  showScreen('hud');
+}
+
+// ---------- Gerbang bos: capai jarak target ----------
+function reachBossGate() {
+  game.state = 'preboss';
+  endEvent();
+  if (game.chaser) { world.group.remove(game.chaser); game.chaser = null; }
+  clearList(world.obstacles);
+  clearList(world.powerups);
+  AudioFX.powerup();
+  showBanner('⚔️ BOS DI DEPAN!', '#ff6a6a');
+  renderPreboss();
+  showScreen('hud', 'preboss');
+}
+function renderPreboss() {
+  $('preboss-coins').textContent = game.coins;
+  $('boost-list').innerHTML = BATTLE_BOOSTS.map(bo => {
+    const chosen = game.battleBoost === bo.id;
+    const afford = game.coins >= bo.cost;
+    return `<button class="boost-card${chosen ? ' chosen' : ''}" data-boost="${bo.id}" ${(!afford && !chosen) ? 'disabled' : ''}>
+      <div class="boost-ico">${bo.icon}</div>
+      <div class="boost-info"><div class="boost-name">${bo.name}</div><div class="boost-desc">${bo.desc}</div></div>
+      <div class="boost-cost">${chosen ? '✓ Dipilih' : `🪙 ${bo.cost}`}</div>
+    </button>`;
+  }).join('');
+  $('boost-list').querySelectorAll('[data-boost]').forEach(b =>
+    b.addEventListener('click', () => buyBoost(b.dataset.boost)));
+}
+function buyBoost(id) {
+  if (game.battleBoost) { toast('Sudah memilih satu boost'); return; }
+  const bo = BATTLE_BOOSTS.find(x => x.id === id); if (!bo) return;
+  if (game.coins < bo.cost) { toast('Koin lari tak cukup'); return; }
+  game.coins -= bo.cost; game.battleBoost = id;
+  AudioFX.powerup(); renderPreboss();
+}
+
+// ---------- Tempur bos (arena bebas) ----------
+const bossKeys = new Set();
+
+function startBossFight() {
+  AudioFX.click();
+  initBoss();
+  game.state = 'boss';
+  showScreen('bosshud');
+}
+function initBoss() {
+  const st = STAGES[game.stageIdx];
+  if (petMesh) petMesh.visible = false;
+  trailFX.clear();
+  clearList(world.obstacles); clearList(world.coins); clearList(world.powerups);
+  const bossZ = -9, baseY = 0;
+  const mesh = buildBoss(st.boss);
+  mesh.position.set(0, baseY, bossZ);
+  scene.add(mesh);
+  const w = WEAPONS.find(x => x.id === store.equippedWeapon) || WEAPONS[0];
+  let playerHP = 5, dmgMult = 1, shieldHits = 0;
+  if (game.battleBoost === 'heart') playerHP = 7;
+  if (game.battleBoost === 'power') dmgMult = 1.5;
+  if (game.battleBoost === 'shield') shieldHits = 3;
+  game.boss = {
+    cfg: st.boss, mesh, baseY,
+    hp: st.boss.hp, hpMax: st.boss.hp,
+    stage: game.stageIdx + 1, diff: 1 + game.stageIdx * 0.18,
+    px: 0, pz: 3, bossX: 0, bossZ,
+    weapon: w, dmgMult, shieldHits,
+    playerHP, playerHPMax: playerHP,
+    invuln: 1.0, fireTimer: 0.3, attackTimer: 1.8,
+    shots: [], bshots: [], telegraphs: [], runPhase: 0, flash: 0, joy: null,
+  };
+  const ch = game.charMesh;
+  ch.visible = true;
+  ch.position.set(0, 0, 3);
+  ch.rotation.set(0, 0, 0);
+  const ud = ch.userData;
+  if (ud.shieldBubble) ud.shieldBubble.visible = false;
+  if (ud.rocketFlames) ud.rocketFlames.visible = false;
+  bossKeys.clear();
+  buildBossHUD();
+}
+function buildBossHUD() {
+  $('boss-name').textContent = game.boss.cfg.name;
+  updateBossHUD();
+}
+function updateBossHUD() {
+  const b = game.boss; if (!b) return;
+  $('boss-hp-fill').style.width = (Math.max(0, b.hp) / b.hpMax * 100) + '%';
+  let h = '';
+  for (let i = 0; i < b.playerHPMax; i++) h += i < b.playerHP ? '❤️' : '🖤';
+  if (b.shieldHits > 0) h += ' ' + '🛡️'.repeat(b.shieldHits);
+  $('player-hearts').innerHTML = h;
+}
+
+function spawnPlayerShots() {
+  const b = game.boss, w = b.weapon;
+  let dx = b.bossX - b.px, dz = b.bossZ - b.pz;
+  const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+  const n = w.pellets;
+  for (let i = 0; i < n; i++) {
+    const off = n > 1 ? (i - (n - 1) / 2) * w.spread : (Math.random() - 0.5) * w.spread;
+    const cos = Math.cos(off), sin = Math.sin(off);
+    const vx = (dx * cos - dz * sin) * w.projSpeed;
+    const vz = (dx * sin + dz * cos) * w.projSpeed;
+    const m = new THREE.Mesh(shotGeo, new THREE.MeshBasicMaterial({ color: w.projColor }));
+    m.position.set(b.px, 1.4, b.pz);
+    scene.add(m);
+    b.shots.push({ mesh: m, vx, vz, dmg: weaponDamage(w) * b.dmgMult, life: 2.5 });
+  }
+}
+function removeShot(arr, i) { scene.remove(arr[i].mesh); const m = arr[i].mesh.material; if (m && m.dispose) m.dispose(); arr.splice(i, 1); }
+
+function bossSpawnShot(dx, dz) {
+  const b = game.boss, sp = 8 * b.diff;
+  const m = new THREE.Mesh(bShotGeo, bShotMat);
+  m.position.set(b.bossX, 1.4, b.bossZ + 1.2);
+  scene.add(m);
+  b.bshots.push({ mesh: m, vx: dx * sp, vz: dz * sp, life: 4 });
+}
+function bossFireAt(tx, tz) {
+  if (!game.boss || game.state !== 'boss') return;
+  const b = game.boss;
+  let dx = tx - b.bossX, dz = tz - b.bossZ; const l = Math.hypot(dx, dz) || 1;
+  bossSpawnShot(dx / l, dz / l);
+}
+function bossTelegraph(x, z, r) {
+  const ring = new THREE.Mesh(new THREE.CircleGeometry(r, 24), teleMat.clone());
+  ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.06, z);
+  scene.add(ring);
+  game.boss.telegraphs.push({ mesh: ring, x, z, r, t: 0.9, max: 0.9 });
+}
+function doBossAttack() {
+  const b = game.boss;
+  const kinds = b.hp / b.hpMax < 0.5 ? ['aim', 'radial', 'slam'] : ['aim', 'aim', 'slam'];
+  const k = kinds[(Math.random() * kinds.length) | 0];
+  if (k === 'aim') {
+    const shots = 1 + (Math.random() < 0.5 ? 1 : 0);
+    for (let i = 0; i < shots; i++) setTimeout(() => bossFireAt(b.px, b.pz), i * 200);
+    b.attackTimer = 1.4 / b.diff;
+  } else if (k === 'radial') {
+    const N = 8 + b.stage * 2;
+    for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2; bossSpawnShot(Math.cos(a), Math.sin(a)); }
+    AudioFX.beep(160, 0.3, 'sawtooth', 0.1, -60);
+    b.attackTimer = 2.1 / b.diff;
+  } else {
+    bossTelegraph(b.px, b.pz, 2.4);
+    b.attackTimer = 1.7 / b.diff;
+  }
+}
+
+function bossTakeDamage(d) {
+  const b = game.boss;
+  b.hp -= d; b.flash = 1;
+  updateBossHUD();
+  AudioFX.beep(520, 0.05, 'square', 0.04, -120);
+  if (b.hp <= 0) { b.hp = 0; updateBossHUD(); bossVictory(); }
+}
+function playerHit() {
+  const b = game.boss; if (b.invuln > 0) return;
+  if (b.shieldHits > 0) { b.shieldHits--; b.invuln = 0.6; AudioFX.shieldBreak(); updateBossHUD(); return; }
+  b.playerHP--; b.invuln = 1.1; game.shake = 0.45; AudioFX.crash(); updateBossHUD();
+  if (b.playerHP <= 0) bossDefeat();
+}
+
+function updateBoss(dt) {
+  const b = game.boss; if (!b) return;
+  const SPEED = 6.8;
+  // --- Input gerak pemain ---
+  let dx = 0, dz = 0;
+  if (bossKeys.has('left')) dx -= 1;
+  if (bossKeys.has('right')) dx += 1;
+  if (bossKeys.has('up')) dz -= 1;
+  if (bossKeys.has('down')) dz += 1;
+  if (b.joy) { dx += b.joy.x; dz += b.joy.y; }
+  const len = Math.hypot(dx, dz);
+  const moving = len > 0.05;
+  if (moving) {
+    dx /= Math.max(1, len); dz /= Math.max(1, len);
+    b.px = THREE.MathUtils.clamp(b.px + dx * SPEED * dt, -6.5, 6.5);
+    b.pz = THREE.MathUtils.clamp(b.pz + dz * SPEED * dt, -3.5, 5.5);
+  }
+  // --- Karakter pemain ---
+  const ch = game.charMesh;
+  ch.position.set(b.px, 0, b.pz);
+  const face = Math.atan2(b.bossX - b.px, b.bossZ - b.pz);
+  ch.rotation.set(0, face, 0);
+  b.runPhase += dt * (moving ? 15 : 5);
+  const s = Math.sin(b.runPhase);
+  const { arms, legs } = ch.userData;
+  legs[0].rotation.x = s * (moving ? 0.8 : 0.15); legs[1].rotation.x = -s * (moving ? 0.8 : 0.15);
+  arms[0].rotation.x = -s * 0.5; arms[1].rotation.x = s * 0.5;
+  if (b.invuln > 0) { b.invuln -= dt; ch.visible = Math.floor(b.invuln * 20) % 2 === 0; }
+  else ch.visible = true;
+
+  // --- Auto-tembak ---
+  b.fireTimer -= dt;
+  if (b.fireTimer <= 0) { spawnPlayerShots(); b.fireTimer = 1 / b.weapon.fireRate; AudioFX.beep(880, 0.04, 'square', 0.03, 180); }
+
+  // --- Bos: gerak & serang ---
+  b.bossX += THREE.MathUtils.clamp(b.px - b.bossX, -1, 1) * dt * 1.3;
+  b.bossX = THREE.MathUtils.clamp(b.bossX, -5, 5);
+  b.mesh.position.x = b.bossX;
+  b.mesh.position.y = b.baseY + Math.sin(performance.now() * 0.002) * 0.15;
+  const at = performance.now() * 0.003;
+  b.mesh.userData.arms[0].rotation.x = Math.sin(at) * 0.3 - 0.2;
+  b.mesh.userData.arms[1].rotation.x = -Math.sin(at) * 0.3 - 0.2;
+  if (b.flash > 0) { b.flash = Math.max(0, b.flash - dt * 5); b.mesh.scale.setScalar(1 + b.flash * 0.05); }
+  b.attackTimer -= dt;
+  if (b.attackTimer <= 0) doBossAttack();
+
+  // --- Peluru pemain ---
+  for (let i = b.shots.length - 1; i >= 0; i--) {
+    const p = b.shots[i];
+    p.mesh.position.x += p.vx * dt; p.mesh.position.z += p.vz * dt; p.life -= dt;
+    const ddx = p.mesh.position.x - b.bossX, ddz = p.mesh.position.z - b.bossZ;
+    if (ddx * ddx + ddz * ddz < 4.8) { bossTakeDamage(p.dmg); removeShot(b.shots, i); if (!game.boss) return; continue; }
+    if (p.life <= 0 || Math.abs(p.mesh.position.x) > 16 || p.mesh.position.z > 12 || p.mesh.position.z < -16) removeShot(b.shots, i);
+  }
+  // --- Peluru bos ---
+  for (let i = b.bshots.length - 1; i >= 0; i--) {
+    const p = b.bshots[i];
+    p.mesh.position.x += p.vx * dt; p.mesh.position.z += p.vz * dt; p.life -= dt;
+    const ddx = p.mesh.position.x - b.px, ddz = p.mesh.position.z - b.pz;
+    if (ddx * ddx + ddz * ddz < 0.55) { scene.remove(p.mesh); b.bshots.splice(i, 1); playerHit(); if (!game.boss) return; continue; }
+    if (p.life <= 0 || Math.abs(p.mesh.position.x) > 16 || p.mesh.position.z > 12 || p.mesh.position.z < -16) { scene.remove(p.mesh); b.bshots.splice(i, 1); }
+  }
+  // --- Telegraph AoE ---
+  for (let i = b.telegraphs.length - 1; i >= 0; i--) {
+    const tg = b.telegraphs[i];
+    tg.t -= dt;
+    tg.mesh.material.opacity = 0.2 + Math.abs(Math.sin(tg.t * 12)) * 0.35;
+    if (tg.t <= 0) {
+      const ddx = b.px - tg.x, ddz = b.pz - tg.z;
+      game.shake = Math.max(game.shake, 0.25);
+      AudioFX.beep(90, 0.25, 'sawtooth', 0.12, -40);
+      scene.remove(tg.mesh); tg.mesh.material.dispose(); b.telegraphs.splice(i, 1);
+      if (ddx * ddx + ddz * ddz < tg.r * tg.r) { playerHit(); if (!game.boss) return; }
+    }
+  }
+}
+
+function cleanupBoss() {
+  const b = game.boss; if (!b) return;
+  scene.remove(b.mesh);
+  for (const p of b.shots) scene.remove(p.mesh);
+  for (const p of b.bshots) scene.remove(p.mesh);
+  for (const t of b.telegraphs) scene.remove(t.mesh);
+  game.boss = null;
+  bossKeys.clear();
+  if (petMesh) petMesh.visible = true;
+  game.charMesh.visible = true;
+}
+function bossVictory() {
+  cleanupBoss();
+  game.state = 'victory';
+  const st = STAGES[game.stageIdx];
+  const cleared = store.clearedStages;
+  if (!cleared.includes(st.id)) { cleared.push(st.id); store.clearedStages = cleared; }
+  store.coinsTotal += game.coins;
+  const sx = store.stats; sx.coins += game.coins; store.stats = sx; checkAchievements();
+  AudioFX.powerup();
+  const next = game.stageIdx + 1 < STAGES.length;
+  $('victory-coins').textContent = game.coins;
+  $('victory-msg').textContent = next
+    ? `Stage "${STAGES[game.stageIdx + 1].name}" terbuka!`
+    : 'Semua stage selesai — kamu juara! 🎉';
+  showScreen('victory');
+}
+function bossDefeat() {
+  cleanupBoss();
+  game.state = 'defeat';
+  AudioFX.crash();
+  $('defeat-msg').textContent = 'Bos mengalahkanmu! Koin lari hangus — coba lagi.';
+  showScreen('defeat');
+}
+function failStage(msg) {
+  game.state = 'defeat';
+  endEvent();
+  if (game.chaser) { world.group.remove(game.chaser); game.chaser = null; }
+  AudioFX.crash();
+  $('defeat-msg').textContent = msg || 'Coba lagi!';
+  showScreen('defeat');
+}
+
+// ---------- Input tempur (joystick sentuh + WASD) ----------
+window.addEventListener('keyup', (e) => {
+  const c = e.code;
+  if (c === 'ArrowLeft' || c === 'KeyA') bossKeys.delete('left');
+  else if (c === 'ArrowRight' || c === 'KeyD') bossKeys.delete('right');
+  else if (c === 'ArrowUp' || c === 'KeyW') bossKeys.delete('up');
+  else if (c === 'ArrowDown' || c === 'KeyS') bossKeys.delete('down');
+});
+let bossPointer = null;
+window.addEventListener('pointerdown', (e) => {
+  if (game.state !== 'boss' || !game.boss) return;
+  bossPointer = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
+  game.boss.joy = { x: 0, y: 0 };
+});
+window.addEventListener('pointermove', (e) => {
+  if (game.state !== 'boss' || !game.boss || !bossPointer || e.pointerId !== bossPointer.id) return;
+  const R = 55;
+  game.boss.joy = {
+    x: THREE.MathUtils.clamp((e.clientX - bossPointer.ox) / R, -1, 1),
+    y: THREE.MathUtils.clamp((e.clientY - bossPointer.oy) / R, -1, 1),
+  };
+});
+window.addEventListener('pointerup', (e) => {
+  if (bossPointer && e.pointerId === bossPointer.id) { bossPointer = null; if (game.boss) game.boss.joy = null; }
+});
+
+// ---------- Tombol mode Petualangan ----------
+$('btn-adventure').addEventListener('click', openMap);
+$('btn-map-close').addEventListener('click', () => { AudioFX.click(); showScreen('menu'); refreshMenu(); });
+$('btn-arsenal').addEventListener('click', () => { menuState.arsenalReturn = 'map'; openArsenal(); });
+$('btn-arsenal-close').addEventListener('click', () => {
+  AudioFX.click();
+  if (menuState.arsenalReturn === 'stage') openStage(menuState.stagePick);
+  else { renderMap(); showScreen('map'); }
+});
+$('btn-stage-start').addEventListener('click', () => startStage(menuState.stagePick));
+$('btn-stage-weapon').addEventListener('click', () => { menuState.arsenalReturn = 'stage'; openArsenal(); });
+$('btn-stage-close').addEventListener('click', () => { AudioFX.click(); renderMap(); showScreen('map'); });
+$('btn-boss-start').addEventListener('click', startBossFight);
+$('btn-victory-next').addEventListener('click', openMap);
+$('btn-defeat-retry').addEventListener('click', () => startStage(game.stageIdx));
+$('btn-defeat-map').addEventListener('click', openMap);
+
+// ============================================================
 // Mulai
 // ============================================================
 buildTheme(THEMES.find(t => t.id === store.themeId) || THEMES[0]);
@@ -2580,4 +3172,6 @@ if (!dailyInfo().claimedToday) { renderDaily(); showScreen('menu', 'daily'); }
 requestAnimationFrame(tick);
 
 // Handle debug untuk inspeksi dari luar modul
-window.__dbg = { renderer, scene, camera, game, world, updatePlayer, updateCamera, spawnPattern, spawnCoin, spawnObstacle, spawnPowerup, updatePowerFX, buildTheme, setCharacter, refreshMenu, getMissions, applyRunToMissions, renderMissions, renderBoard, saveToBoard, THEMES, CHARACTERS, PETS, TRAILS, store, toast, checkCollisions, die, finalizeRun, offerRevive, acceptRevive, declineRevive, startEvent, endEvent, registerNearMiss, updateMultUI, moveWorld, dailyInfo, claimDaily, renderDaily, spinWheel, renderWheel, openChest, maybeShowChest, checkAchievements, achValues, renderProfile, buyUpgrade, applyPet, buildPetMesh, trailFX, powerDuration, levelInfo, setTab, carouselGo };
+window.__dbg = { renderer, scene, camera, game, world, updatePlayer, updateCamera, spawnPattern, spawnCoin, spawnObstacle, spawnPowerup, updatePowerFX, buildTheme, setCharacter, refreshMenu, getMissions, applyRunToMissions, renderMissions, renderBoard, saveToBoard, THEMES, CHARACTERS, PETS, TRAILS, store, toast, checkCollisions, die, finalizeRun, offerRevive, acceptRevive, declineRevive, startEvent, endEvent, registerNearMiss, updateMultUI, moveWorld, dailyInfo, claimDaily, renderDaily, spinWheel, renderWheel, openChest, maybeShowChest, checkAchievements, achValues, renderProfile, buyUpgrade, applyPet, buildPetMesh, trailFX, powerDuration, levelInfo, setTab, carouselGo,
+  WEAPONS, STAGES, BATTLE_BOOSTS, buildBoss, openMap, renderMap, openArsenal, renderArsenal, buyWeapon, equipWeapon, upgradeWeapon,
+  startStage, reachBossGate, renderPreboss, buyBoost, startBossFight, initBoss, updateBoss, bossVictory, bossDefeat, failStage, bossKeys };
