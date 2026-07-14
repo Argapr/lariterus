@@ -127,6 +127,16 @@ export interface BossState {
   shots: Projectile[]; bshots: Projectile[]; telegraphs: Telegraph[];
   runPhase: number; flash: number;
   joy: { x: number; y: number } | null;
+  // Gerak mulus & kelincahan
+  targetX: number; targetZ: number;
+  velX: number; velZ: number;
+  dashTime: number; dashCd: number; dashDX: number; dashDZ: number;
+  faceAng: number;
+  // Serangan bos & fase
+  windup: number; pendingAttack: string | null;
+  bossVY: number; bossLunge: number;
+  enraged: boolean; hitStop: number;
+  dead: boolean; deadT: number;
 }
 
 export type GameStateName =

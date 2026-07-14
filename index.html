@@ -9,9 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,800;1,700&family=Archivo+Black&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
-  </script>
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -261,8 +258,12 @@
       <div class="boss-hp"><div id="boss-hp-fill"></div></div>
     </div>
     <div class="player-hearts" id="player-hearts"></div>
-    <div class="boss-hint">Geser layar untuk bergerak · tembak otomatis</div>
+    <div class="boss-hint">Geser untuk bergerak · tembak otomatis · tombol untuk menghindar</div>
+    <button id="btn-dodge" class="btn-dodge">DODGE</button>
   </div>
+
+  <!-- ===== Angka damage (tempur bos) ===== -->
+  <div id="dmg-layer"></div>
 
   <!-- ===== MENANG ===== -->
   <div id="victory-screen" class="screen overlay hidden">
@@ -283,6 +284,6 @@
   <!-- ===== TOAST ===== -->
   <div id="toasts"></div>
 
-  <script type="module" src="js/game.js"></script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

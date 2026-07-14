@@ -53,6 +53,11 @@ export function buildBoss(cfg: BossCfg): THREE.Group {
     horn.rotation.z = side * -0.3; g.add(horn);
   }
   g.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-  g.userData = { arms };
+  g.userData = {
+    arms,
+    bodyMat, accMat,
+    baseColor: new THREE.Color(cfg.color),
+    accColor: new THREE.Color(cfg.accent),
+  };
   return g;
 }

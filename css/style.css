@@ -756,3 +756,44 @@ html, body {
 #boss-hp-fill { height: 100%; width: 100%; border-radius: 999px; background: linear-gradient(90deg, #ff4a4a, #ff8a5a); transition: width 0.15s; }
 .player-hearts { font-size: 22px; letter-spacing: 2px; margin-top: 4px; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 .boss-hint { position: fixed; bottom: 24px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--dim); }
+
+/* Tombol dodge */
+.btn-dodge {
+  position: fixed;
+  right: max(22px, env(safe-area-inset-right));
+  bottom: calc(46px + env(safe-area-inset-bottom));
+  width: 92px; height: 92px;
+  border-radius: 50%;
+  border: 2px solid rgba(125, 220, 255, 0.6);
+  background: radial-gradient(circle at 50% 35%, rgba(90, 200, 255, 0.45), rgba(30, 90, 180, 0.5));
+  color: #eaf6ff;
+  font-family: 'Archivo Black', sans-serif; font-style: italic;
+  font-size: 15px; letter-spacing: 1px;
+  box-shadow: 0 0 22px rgba(90, 180, 255, 0.4);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.08s, opacity 0.1s;
+  touch-action: none;
+}
+.btn-dodge:active { transform: scale(0.9); }
+.btn-dodge.cooldown { opacity: 0.4; }
+
+/* Angka damage yang memantul */
+#dmg-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.dmg-num {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: 'Archivo Black', sans-serif; font-style: italic;
+  font-weight: 900;
+  color: #ffe066;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 10px rgba(255, 200, 60, 0.5);
+  animation: dmg-pop 0.7s ease-out forwards;
+  white-space: nowrap;
+}
+.dmg-num.crit { color: #ff7a3c; font-size: 1.35em; }
+.dmg-num.player { color: #ff5a5a; }
+@keyframes dmg-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  20% { opacity: 1; transform: translate(-50%, -95%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -180%) scale(1); }
+}
