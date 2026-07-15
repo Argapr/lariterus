@@ -2,6 +2,6 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   base: './',
-  server: { port: 8099 },
+  server: { port: Number(process.env.PORT) || 8099 },
   build: { target: 'es2020', outDir: 'dist' },
 });

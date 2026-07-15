@@ -46,20 +46,61 @@ export async function instantiate(url: string): Promise<ModelInstance> {
 }
 
 /**
+ * Bounding box TAMPILAN yang sadar-skinning.
+ *
+ * Box3.setFromObject() memakai geometri bind-pose × matrixWorld node mesh.
+ * Pada model ber-rangka (mis. Quaternius) geometri disimpan mungil dan
+ * dikompensasi skala ×100 bertingkat di armature + node mesh — sedangkan yang
+ * dirender mengikuti transformasi TULANG. Akibatnya setFromObject bisa melenceng
+ * ~100×: model dinormalisasi jadi sebutir debu (bug "karakter hilang/kecil").
+ *
+ * Di sini vertex SkinnedMesh dihitung lewat getVertexPosition() (menerapkan
+ * transformasi tulang), sehingga box = yang benar-benar tampak di layar.
+ */
+const _tmpBox = new THREE.Box3();
+export function computeDisplayBox(root: THREE.Object3D, skinnedOnly = false): THREE.Box3 {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  let hasSkinned = false;
+  root.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) hasSkinned = true; });
+  root.traverse(o => {
+    const mesh = o as THREE.SkinnedMesh;
+    if (!(mesh as unknown as THREE.Mesh).isMesh) return;
+    const pos = mesh.geometry.getAttribute('position');
+    if (!pos) return;
+    if (mesh.isSkinnedMesh) {
+      for (let i = 0; i < pos.count; i++) {
+        mesh.getVertexPosition(i, v).applyMatrix4(mesh.matrixWorld);
+        box.expandByPoint(v);
+      }
+    } else {
+      // Prop statis (senjata dll.) di bawah tulang ber-skala bisa memberi box palsu.
+      // Kalau model punya skinned mesh, pijakan/tinggi cukup dari badannya saja.
+      if (skinnedOnly && hasSkinned) return;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      _tmpBox.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld);
+      box.union(_tmpBox);
+    }
+  });
+  return box;
+}
+
+/**
  * Samakan skala & pijakan model:
  * - tinggi diskalakan ke `targetHeight`
  * - digeser agar kaki menyentuh y = 0 dan terpusat di x/z
  * Ini yang bikin model dari pack mana pun langsung pas tanpa setel manual.
  */
 export function normalizeModel(root: THREE.Object3D, targetHeight: number): number {
-  const box = new THREE.Box3().setFromObject(root);
+  const box = computeDisplayBox(root, true);
   const size = box.getSize(new THREE.Vector3());
   if (size.y <= 0.0001) return 1;
   const scale = targetHeight / size.y;
   root.scale.setScalar(scale);
 
   // Hitung ulang setelah diskalakan, lalu tempelkan ke lantai
-  const box2 = new THREE.Box3().setFromObject(root);
+  const box2 = computeDisplayBox(root, true);
   const center = box2.getCenter(new THREE.Vector3());
   root.position.x -= center.x;
   root.position.z -= center.z;

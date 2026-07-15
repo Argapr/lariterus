@@ -3,7 +3,7 @@
 // Menggantikan animasi sinus manual dengan klip animasi asli.
 // ============================================================
 import * as THREE from 'three';
-import { instantiate, normalizeModel } from './assets';
+import { instantiate, normalizeModel, computeDisplayBox } from './assets';
 
 /** Normalkan nama klip: 'CharacterArmature|Run_Fast' → 'runfast' */
 function norm(s: string): string {
@@ -33,7 +33,21 @@ export class AnimatedCharacter {
     // sementara gameplay bebas menyetel posisi/rotasi di group luar tanpa bentrok.
     const holder = new THREE.Group();
     holder.add(root);
-    normalizeModel(root, targetHeight);
+
+    // Pasang pose frame pertama klip idle (atau klip pertama) SEBELUM normalisasi.
+    // Bind-pose bisa berbeda dari pose tampil (badan tergeser/kaki lain posisi),
+    // sehingga tanpa ini model bisa melayang atau tingginya meleset.
+    const poseClip = clips.find(c => norm(c.name).includes('idle')) ?? clips[0];
+    if (poseClip) {
+      const poser = new THREE.AnimationMixer(root);
+      poser.clipAction(poseClip).play();
+      poser.update(1e-4);       // tulis pose frame-0 ke tulang (delta 0 di-skip mixer)
+      normalizeModel(root, targetHeight);
+      poser.stopAllAction();
+      poser.uncacheRoot(root);  // mixer asli dibuat bersih di constructor
+    } else {
+      normalizeModel(root, targetHeight);
+    }
     return new AnimatedCharacter(holder, clips, root);
   }
 
@@ -77,7 +91,27 @@ export class AnimatedCharacter {
   /** Klip yang sedang diputar (nama asli dari file). */
   get playing(): string { return this.currentClip; }
 
-  update(dt: number) { this.mixer.update(dt); }
+  // Jepret kaki ke tanah SETELAH animasi benar-benar berjalan.
+  // Beberapa klip menggeser rangka relatif terhadap bind-pose, sehingga
+  // normalisasi saat load bisa meleset (model melayang). Ukur sekali pose
+  // nyata yang tampil, lalu koreksi — berlaku untuk karakter maupun bos.
+  private settleT = 0.3;
+  private _wp = new THREE.Vector3();
+
+  snapToGround() {
+    const box = computeDisplayBox(this.animRoot, true); // badan saja, abaikan prop
+    if (box.isEmpty()) return;
+    this.root.getWorldPosition(this._wp);
+    this.animRoot.position.y -= (box.min.y - this._wp.y);
+  }
+
+  update(dt: number) {
+    this.mixer.update(dt);
+    if (this.settleT > 0 && dt > 0) {
+      this.settleT -= dt;
+      if (this.settleT <= 0) this.snapToGround();
+    }
+  }
 
   dispose() {
     this.mixer.stopAllAction();
