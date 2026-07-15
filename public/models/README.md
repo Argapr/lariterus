@@ -1,5 +1,22 @@
 # Model 3D (karakter & bos)
 
+## Yang sudah terpasang (2026-07-15)
+
+Sumber: pack **Quaternius** (CC0) via mirror `github.com/trebeljahr/quaternius-showcase`.
+
+| File | Klip penting | Rencana pakai |
+|---|---|---|
+| `characters/gunner.glb` | Idle_Gun, Run_Gun, Run_Shoot, Jump, **Duck**(=slide), HitReact, Death (18 klip) | Karakter utama |
+| `characters/knight.glb` | Idle, Run, Roll, Jump, swordAttack, Death (12 klip) | Karakter kedua |
+| `bosses/trex.glb` | Attack, Death, Idle, Walk, Jump | Bos |
+| `bosses/spider.glb` | Attack, Death, Idle, Walk | Bos (Kalajengking Raja) |
+| `bosses/snake.glb` | Attack, Idle, Walk, Jump | Bos |
+| `bosses/mech.glb` | Punch, Kick, HitRecieve, Death, Idle, Run (20 klip) | Bos (Bot Penjaga) |
+
+Pack **Ultimate Monsters** (yang di screenshot) ada di Google Drive Quaternius —
+strukturnya per-kategori sehingga sulit diunduh otomatis; kalau mau, unduh manual
+dan taruh di `bosses/`, kode tidak perlu diubah.
+
 Folder ini di-serve Vite di root URL. Contoh:
 `public/models/characters/ninja.glb` → diakses sebagai `/models/characters/ninja.glb`
 

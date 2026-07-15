@@ -2,6 +2,12 @@ import type { CharacterCfg } from '../types';
 
 // price 0 = gratis
 export const CHARACTERS: CharacterCfg[] = [
+  // Model .glb ber-rig (Quaternius, CC0) — animasi asli, bukan prosedural
+  { id: 'rio', name: 'Rio', desc: 'Penembak pemberani', kind: 'human', swatch: '#f7a51d', price: 0,
+    model: '/models/characters/gunner.glb' },
+  { id: 'arka', name: 'Arka', desc: 'Ksatria pedang', kind: 'human', swatch: '#8a8f99', price: 0,
+    model: '/models/characters/knight.glb' },
+  // Karakter prosedural lama (bola & kapsul)
   { id: 'toni', name: 'Toni', desc: 'Jagoan ceria', kind: 'human', swatch: '#e84040', price: 0,
     skin: 0xf2c197, shirt: 0xf7d94c, pants: 0x3a5bd9, cap: 0xe84040, hair: 0x4a2f1d, shoe: 0xc9372c, girl: false },
   { id: 'sinta', name: 'Sinta', desc: 'Si lincah', kind: 'human', swatch: '#ff5fa2', price: 0,

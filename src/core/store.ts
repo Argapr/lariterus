@@ -59,6 +59,11 @@ export const store = {
   set clearedStages(v: string[]) { localStorage.setItem('er_cleared_stages', JSON.stringify(v)); },
 };
 
+// Migrasi sekali: pemain lama di default 'toni' dipindah ke karakter model 'rio'.
+// Harus di sini (bukan main.ts) supaya jalan SEBELUM menuState menghitung index karakter.
+if (store.charId === 'toni' && !localStorage.getItem('er_char_v2')) store.charId = 'rio';
+localStorage.setItem('er_char_v2', '1');
+
 // XP → level (dipakai lintas modul)
 export function levelInfo() {
   const xp = store.xp;

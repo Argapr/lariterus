@@ -32,7 +32,16 @@ export interface ModelInstance {
 export async function instantiate(url: string): Promise<ModelInstance> {
   const gltf = await loadGLTF(url);
   const root = cloneSkinned(gltf.scene) as THREE.Group;
-  root.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = false; } });
+  root.traverse(o => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh) {
+      m.castShadow = true;
+      m.receiveShadow = false;
+      // SkinnedMesh: bounding dihitung dari bind pose, bukan tulang teranimasi —
+      // culling salah nilai & model "hilang". Matikan culling per-mesh.
+      m.frustumCulled = false;
+    }
+  });
   return { root, clips: gltf.animations.slice() };
 }
 

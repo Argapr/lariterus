@@ -8,23 +8,22 @@ import { LANES, GRAVITY, JUMP_VY, SLIDE_TIME } from '../core/constants';
 import { AudioFX } from '../core/audio';
 import { powerDuration } from '../data/progression';
 import { buildCharacter } from '../gfx/characterMesh';
-import type { AnimatedCharacter } from '../gfx/animatedCharacter';
+import { AnimatedCharacter } from '../gfx/animatedCharacter';
 import { petMesh } from '../gfx/petMesh';
 import { trailFX } from '../gfx/trail';
 import { popup } from '../ui/dom';
 import type { CharacterCfg } from '../types';
 
-export function setCharacter(cfg: CharacterCfg) {
-  if (game.charMesh) scene.remove(game.charMesh);
-  game.charMesh = buildCharacter(cfg);
-  game.charMesh.position.set(0, 0, 0);
+// Token supaya pemuatan model yang tersusul (ganti karakter cepat) tidak menimpa
+let charToken = 0;
 
+function attachCharExtras(g: THREE.Group) {
   const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.95, 20, 16),
     new THREE.MeshBasicMaterial({ color: 0x55c8f0, transparent: true, opacity: 0.28, depthWrite: false }));
   bubble.position.y = 1.0;
   bubble.visible = false;
-  game.charMesh.add(bubble);
-  game.charMesh.userData.shieldBubble = bubble;
+  g.add(bubble);
+  g.userData.shieldBubble = bubble;
 
   const flames = new THREE.Group();
   for (const sx of [-0.15, 0.15]) {
@@ -35,10 +34,46 @@ export function setCharacter(cfg: CharacterCfg) {
     flames.add(f);
   }
   flames.visible = false;
-  game.charMesh.add(flames);
-  game.charMesh.userData.rocketFlames = flames;
+  g.add(flames);
+  g.userData.rocketFlames = flames;
+}
 
-  scene.add(game.charMesh);
+function swapCharMesh(g: THREE.Group) {
+  const old = game.charMesh as THREE.Group | undefined;
+  if (old) {
+    const oldAnim = old.userData.anim as AnimatedCharacter | undefined;
+    oldAnim?.dispose();
+    g.position.copy(old.position);   // jangan "teleport" saat swap
+    scene.remove(old);
+  }
+  attachCharExtras(g);
+  game.charMesh = g;
+  scene.add(g);
+}
+
+export function setCharacter(cfg: CharacterCfg) {
+  const token = ++charToken;
+  if (cfg.model) {
+    // Placeholder kosong dulu supaya game loop tidak crash selagi model dimuat
+    if (!game.charMesh) {
+      const ph = new THREE.Group();
+      attachCharExtras(ph);
+      game.charMesh = ph;
+      scene.add(ph);
+    }
+    AnimatedCharacter.load(cfg.model, 2.05).then(ac => {
+      if (token !== charToken) { ac.dispose(); return; }
+      ac.animRoot.rotation.y = Math.PI; // glTF menghadap +Z; arah lari kita -Z
+      ac.root.userData.anim = ac;
+      if (!ac.play('idle')) ac.play(ac.listClips()[0] ?? '');
+      swapCharMesh(ac.root);
+    }).catch(e => console.error('Gagal memuat model karakter:', cfg.model, e));
+    return;
+  }
+  const g = buildCharacter(cfg);
+  g.position.set(0, 0, 0);
+  swapCharMesh(g);
+  g.position.set(0, 0, 0);
 }
 
 // ---------- Input dasar ----------
@@ -90,7 +125,7 @@ export function updatePlayer(dt: number) {
   if (anim) {
     // --- Model ber-rig: pakai klip animasi asli ---
     if (game.y > 0.01) { anim.play('jump') || anim.play('idle'); }
-    else if (game.sliding > 0) { anim.play('slide') || anim.play('roll') || anim.play('idle'); }
+    else if (game.sliding > 0) { anim.play('duck') || anim.play('slide') || anim.play('roll') || anim.play('idle'); }
     else if (game.state === 'playing') { anim.play('run') || anim.play('walk'); }
     else { anim.play('idle') || anim.play('run'); }
     ch.rotation.x = 0;

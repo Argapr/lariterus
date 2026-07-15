@@ -14,6 +14,8 @@ export interface ShopItem {
 export interface CharacterCfg extends ShopItem {
   kind: 'human' | 'dino';
   swatch: string;
+  /** Kalau diisi: karakter memakai model .glb ber-rig ini (field warna di bawah diabaikan). */
+  model?: string;
   // Manusia
   skin?: number; shirt?: number; pants?: number; cap?: number | null;
   hair?: number; shoe?: number; girl?: boolean;
@@ -72,6 +74,10 @@ export interface BossCfg {
   color: number;
   accent: number;
   horns: number;
+  /** Kalau diisi: bos memakai model .glb ber-rig ini (buildBoss prosedural jadi fallback). */
+  model?: string;
+  /** Tinggi bos setelah dinormalisasi (default 4.6). */
+  size?: number;
 }
 
 export interface Stage {

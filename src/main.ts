@@ -104,7 +104,7 @@ on('btn-arsenal-close', () => {
 on('btn-stage-start', startStageRun);
 on('btn-stage-weapon', () => openArsenal('stage'));
 on('btn-stage-close', () => { AudioFX.click(); renderMap(); showScreen('menu', 'map'); });
-on('btn-boss-start', startBossFight);
+on('btn-boss-start', () => { void startBossFight(); });
 on('btn-victory-next', victoryToMap);
 on('btn-defeat-retry', retryStage);
 on('btn-defeat-map', openMap);
@@ -216,7 +216,13 @@ function tick(now: number) {
     trailFX.update(dt, game.speed * dt * 0.6);
     game.charMesh.rotation.y = Math.sin(now * 0.0006) * 0.3;
   } else if (game.state === 'gameover') {
-    if (game.charMesh.rotation.x < 1.4) game.charMesh.rotation.x += dt * 5;
+    const anim = game.charMesh.userData.anim as AnimatedCharacter | undefined;
+    if (anim) {
+      anim.play('death', { loop: false });
+      anim.update(dt);
+    } else if (game.charMesh.rotation.x < 1.4) {
+      game.charMesh.rotation.x += dt * 5;
+    }
   }
 
   updateCamera(dt);
@@ -233,6 +239,7 @@ let spikeChar: AnimatedCharacter | null = null;
 /** Tampilkan model .glb sebagai karakter (menggantikan yang prosedural). */
 async function spike(url: string, height = 2.05) {
   const ac = await AnimatedCharacter.load(url, height);
+  ac.animRoot.rotation.y = Math.PI; // samakan orientasi dengan karakter game
   if (game.charMesh) scene.remove(game.charMesh);
   spikeChar = ac;
   game.charMesh = ac.root;
@@ -270,7 +277,7 @@ function spikeOff() {
 // Debug handle (opsional)
 (window as any).__game = {
   game, world, store, renderer, scene, camera, updateBoss, doDodge, updateCamera, checkStageGoal,
-  spike, spikeClips, spikePlay, spikeOff,
+  updatePlayer, moveWorld, spike, spikeClips, spikePlay, spikeOff,
 };
 
 // failStage diekspor ulang agar tree-shaking tidak membuang (dipakai run.ts)

@@ -10,6 +10,8 @@ import { WEAPON_UPGRADE_MAX, weaponUpgradeCost } from '../core/constants';
 import { buildTheme } from '../gfx/world';
 import { buildBoss } from '../gfx/bossMesh';
 import { buildWeaponMesh, buildBullet } from '../gfx/weaponMesh';
+import { AnimatedCharacter } from '../gfx/animatedCharacter';
+import { findBone } from '../gfx/assets';
 import { trailFX } from '../gfx/trail';
 import { petMesh } from '../gfx/petMesh';
 import { STAGES, stageUnlocked } from '../data/stages';
@@ -243,13 +245,16 @@ export function renderBoosts() {
 // ============================================================
 function clearBoss() {
   if (game.boss) {
+    const bAnim = game.boss.mesh.userData.anim as AnimatedCharacter | undefined;
+    bAnim?.dispose();
     scene.remove(game.boss.mesh);
     for (const s of game.boss.shots) scene.remove(s.mesh);
     for (const s of game.boss.bshots) scene.remove(s.mesh);
     for (const t of game.boss.telegraphs) scene.remove(t.mesh);
     game.boss = null;
   }
-  if (weaponMesh) { game.charMesh.remove(weaponMesh); weaponMesh = null; muzzleObj = null; }
+  if (weaponMesh) { game.charMesh.remove(weaponMesh); weaponMesh = null; }
+  if (muzzleObj) { muzzleObj.parent?.remove(muzzleObj); muzzleObj = null; }
   if (bossShadow) { scene.remove(bossShadow); bossShadow = null; }
   clearParticles();
   setVignette(false);
@@ -274,7 +279,7 @@ function playBossIntro(name: string) {
   window.setTimeout(() => { el.classList.add('hidden'); el.classList.remove('in', 'go'); }, INTRO_TIME * 1000);
 }
 
-export function startBossFight() {
+export async function startBossFight() {
   AudioFX.click();
   const st = STAGES[game.stageIdx];
   // Terapkan boost terpilih (bayar dengan koin lari)
@@ -291,10 +296,44 @@ export function startBossFight() {
   setVignette(true);
 
   const weapon: Weapon = WEAPONS.find(w => w.id === store.equippedWeapon) || WEAPONS[0];
-  const bossMesh = buildBoss(st.boss);
-  bossMesh.scale.setScalar(BOSS_SCALE);
+
+  // Bos: model .glb ber-rig kalau ada; fallback ke prosedural
+  let bossMesh: THREE.Group;
+  let bossAnim: AnimatedCharacter | null = null;
+  if (st.boss.model) {
+    try {
+      bossAnim = await AnimatedCharacter.load(st.boss.model, st.boss.size ?? 4.6);
+      bossMesh = bossAnim.root;
+      bossMesh.userData.anim = bossAnim;
+      // Material di-clone per-tempur (cache GLTF berbagi material — jangan mutasi bersama),
+      // lalu simpan emissive dasar untuk kedip putih & fase marah
+      const mats: THREE.MeshStandardMaterial[] = [];
+      bossMesh.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && m.material) {
+          m.material = (m.material as THREE.Material).clone();
+          const mm = m.material as THREE.MeshStandardMaterial;
+          if (mm.emissive) {
+            mm.userData.baseEmissive = mm.emissive.clone();
+            mats.push(mm);
+          }
+        }
+      });
+      bossMesh.userData.mats = mats;
+      bossAnim.play('idle');
+      // glTF menghadap +Z = ke arah pemain — tidak perlu diputar
+    } catch (e) {
+      console.error('Gagal memuat model bos, pakai prosedural:', e);
+      bossMesh = buildBoss(st.boss);
+      bossMesh.scale.setScalar(BOSS_SCALE);
+      bossMesh.rotation.y = Math.PI;
+    }
+  } else {
+    bossMesh = buildBoss(st.boss);
+    bossMesh.scale.setScalar(BOSS_SCALE);
+    bossMesh.rotation.y = Math.PI;
+  }
   bossMesh.position.set(0, 0, BOSS_Z);
-  bossMesh.rotation.y = Math.PI; // menghadap pemain
   scene.add(bossMesh);
 
   // Bayangan kontak: bikin bos terasa berpijak & besar
@@ -306,16 +345,32 @@ export function startBossFight() {
   bossShadow.position.set(0, 0.02, BOSS_Z);
   scene.add(bossShadow);
 
-  // Bawa karakter pemain ke arena + pasang senjata di tangan
+  // Bawa karakter pemain ke arena
   game.charMesh.rotation.set(0, 0, 0);
   game.charMesh.position.set(0, 0, PLAYER_START_Z);
-  weaponMesh = buildWeaponMesh(weapon.shape, weapon.projColor);
-  weaponMesh.position.set(0.34, 1.05, -0.35);
-  weaponMesh.userData.baseZ = -0.35;
-  weaponMesh.userData.kick = 0;
-  weaponMesh.userData.spin = 0;
-  game.charMesh.add(weaponMesh);
-  muzzleObj = weaponMesh.userData.muzzle as THREE.Object3D;
+  const charAnim = game.charMesh.userData.anim as AnimatedCharacter | undefined;
+  if (charAnim) {
+    // Model ber-rig sudah membawa senjatanya sendiri (mis. gunner) —
+    // cukup cari tulang tangan sebagai titik moncong tembakan
+    weaponMesh = null;
+    const hand = findBone(game.charMesh, 'handr') ?? findBone(game.charMesh, 'hand');
+    if (hand) {
+      muzzleObj = new THREE.Object3D();
+      muzzleObj.position.set(0, 0.15, 0);
+      hand.add(muzzleObj);
+    } else {
+      muzzleObj = null; // firePlayer punya titik fallback
+    }
+  } else {
+    // Karakter prosedural: pasang mesh senjata sesuai wujudnya
+    weaponMesh = buildWeaponMesh(weapon.shape, weapon.projColor);
+    weaponMesh.position.set(0.34, 1.05, -0.35);
+    weaponMesh.userData.baseZ = -0.35;
+    weaponMesh.userData.kick = 0;
+    weaponMesh.userData.spin = 0;
+    game.charMesh.add(weaponMesh);
+    muzzleObj = weaponMesh.userData.muzzle as THREE.Object3D;
+  }
 
   const diff = 1 + game.stageIdx * 0.35;
   game.boss = {
@@ -498,6 +553,9 @@ function beginAttack() {
   const kind = kinds[(Math.random() * kinds.length) | 0];
   b.pendingAttack = kind;
   b.windup = windupTime(b);
+  // Model ber-rig: mainkan klip serangannya (mech tak punya 'attack' → 'punch')
+  const anim = b.mesh.userData.anim as AnimatedCharacter | undefined;
+  if (anim) { anim.play('attack', { loop: false, fade: 0.12 }) || anim.play('punch', { loop: false, fade: 0.12 }); }
   if (kind === 'slam') {
     // Telegraph muncul & mengisi selama wind-up, meledak saat wind-up habis
     const r = 2.0;
@@ -579,6 +637,15 @@ function triggerStagger(b: BossState) {
 function startBossDeath() {
   const b = game.boss!;
   b.dead = true; b.deadT = DEATH_TIME;
+  // Model ber-rig: klip kematian kalau ada (ular tak punya → jatuh prosedural)
+  const anim = b.mesh.userData.anim as AnimatedCharacter | undefined;
+  const played = !!(anim && anim.play('death', { loop: false, fade: 0.1 }));
+  b.mesh.userData.deathClip = played;
+  if (played) {
+    // beri waktu sepanjang klipnya (dibatasi biar tidak kelamaan)
+    const clip = anim!.findClip('death');
+    if (clip) b.deadT = Math.min(2.4, Math.max(DEATH_TIME, clip.duration * 0.9));
+  }
   b.windup = 0; b.pendingAttack = null; b.stagger = 0;
   for (const t of b.telegraphs) scene.remove(t.mesh);
   b.telegraphs = [];
@@ -594,9 +661,14 @@ function startBossDeath() {
 /** Napas, goyang mengancam, sentakan mundur, bayangan kontak. */
 function animateBossBody(b: BossState, dt: number, now: number) {
   const ud = b.mesh.userData as any;
-  const br = 1 + Math.sin(now * 0.0026) * 0.05;                 // napas naik-turun
-  if (ud.body) ud.body.scale.set(1.1, 1.15 * br, 1);
-  if (ud.head) ud.head.position.y = ud.headBaseY + Math.sin(now * 0.0026 + 0.6) * 0.07;
+  const anim = ud.anim as AnimatedCharacter | undefined;
+  if (anim) {
+    anim.update(dt); // napas & gerak dari klipnya sendiri
+  } else {
+    const br = 1 + Math.sin(now * 0.0026) * 0.05;               // napas naik-turun
+    if (ud.body) ud.body.scale.set(1.1, 1.15 * br, 1);
+    if (ud.head) ud.head.position.y = ud.headBaseY + Math.sin(now * 0.0026 + 0.6) * 0.07;
+  }
   const lean = b.stagger > 0 ? 0.3 * (b.stagger / 0.9) : 0;     // limbung ke belakang
   b.mesh.rotation.z = Math.sin(now * 0.0009) * 0.05 + lean * 0.5;
   b.mesh.rotation.x = lean;
@@ -613,6 +685,15 @@ function animateBossBody(b: BossState, dt: number, now: number) {
 
 /** Pose tempur: kuda-kuda menghadap bos, senjata teracung. */
 function poseCombatStance(b: BossState, dt: number, moving: boolean) {
+  const anim = game.charMesh.userData.anim as AnimatedCharacter | undefined;
+  if (anim) {
+    // Model ber-rig: klip bergaya senjata kalau ada
+    if (moving) { anim.play('run_gun') || anim.play('run') || anim.play('walk'); }
+    else { anim.play('idle_gun') || anim.play('idle'); }
+    anim.update(dt);
+    updateWeapon(dt);
+    return;
+  }
   const ud = game.charMesh.userData as { arms?: THREE.Group[]; legs?: THREE.Group[] };
   b.runPhase += dt * (moving ? 13 : 4);
   const s = Math.sin(b.runPhase) * (moving ? 0.5 : 0.06);
@@ -640,9 +721,14 @@ export function updateBoss(dt: number) {
   if (b.dead) {
     b.deadT -= dt;
     const k = THREE.MathUtils.clamp(1 - b.deadT / DEATH_TIME, 0, 1);
-    b.mesh.rotation.x = -k * 1.5;
-    b.mesh.rotation.z = Math.sin(k * 9) * 0.12 * (1 - k);
-    b.mesh.position.y = b.baseY + Math.sin(k * Math.PI) * 0.5 - k * 0.6;
+    const deadAnim = b.mesh.userData.anim as AnimatedCharacter | undefined;
+    if (b.mesh.userData.deathClip && deadAnim) {
+      deadAnim.update(dt);   // klip kematian model yang bekerja
+    } else {
+      b.mesh.rotation.x = -k * 1.5;
+      b.mesh.rotation.z = Math.sin(k * 9) * 0.12 * (1 - k);
+      b.mesh.position.y = b.baseY + Math.sin(k * Math.PI) * 0.5 - k * 0.6;
+    }
     if (Math.random() < 0.4) {
       spawnBurst(
         b.mesh.position.x + (Math.random() - 0.5) * 3.4,
@@ -706,7 +792,13 @@ export function updateBoss(dt: number) {
   // ---------- Fase marah (HP < 50%) ----------
   if (!b.enraged && b.hp <= b.hpMax * 0.5) {
     b.enraged = true;
-    if (ud2.bodyMat) (ud2.bodyMat.emissive as THREE.Color).setHex(0x551010);
+    const emats = ud2.mats as THREE.MeshStandardMaterial[] | undefined;
+    if (emats) {
+      // fase marah: emissive dasar digeser merah → kedip putih tetap jalan di atasnya
+      for (const m of emats) (m.userData.baseEmissive as THREE.Color).setHex(0x551010);
+    } else if (ud2.bodyMat) {
+      (ud2.bodyMat.emissive as THREE.Color).setHex(0x551010);
+    }
     game.shake = 0.6;
     popup('BOS MARAH! 🔥');
     AudioFX.beep(90, 0.4, 'sawtooth', 0.14, -30);
@@ -728,12 +820,14 @@ export function updateBoss(dt: number) {
     b.mesh.position.y = b.baseY + Math.abs(Math.sin(now * 0.003)) * 0.2 - b.bossVY * 0.5;
   }
   animateBossBody(b, dt, now);
-  // kedip putih saat kena
-  if (b.flash > 0) {
-    b.flash -= dt;
-    if (ud2.bodyMat) (ud2.bodyMat.color as THREE.Color).copy(ud2.baseColor).lerp(_white, b.flash * 3);
+  // kedip putih saat kena — model: lewat emissive semua material; prosedural: warna body
+  if (b.flash > 0) b.flash -= dt;
+  const k = Math.max(0, Math.min(1, b.flash * 3));
+  const mats = ud2.mats as THREE.MeshStandardMaterial[] | undefined;
+  if (mats) {
+    for (const m of mats) m.emissive.copy(m.userData.baseEmissive).lerp(_white, k);
   } else if (ud2.bodyMat) {
-    (ud2.bodyMat.color as THREE.Color).copy(ud2.baseColor);
+    (ud2.bodyMat.color as THREE.Color).copy(ud2.baseColor).lerp(_white, k);
   }
   // pewaktu limbung & pukulan beruntun
   if (b.stagger > 0) b.stagger = Math.max(0, b.stagger - dt);
@@ -782,6 +876,12 @@ export function updateBoss(dt: number) {
     if (b.windup <= 0) { executeAttack(b.pendingAttack!); b.pendingAttack = null; b.attackTimer = attackGap(b); }
   } else {
     if (ud2.arms) { ud2.arms[0].rotation.x *= (1 - Math.min(1, dt * 8)); ud2.arms[1].rotation.x *= (1 - Math.min(1, dt * 8)); }
+    // Model ber-rig: balik ke idle (saat menerjang: klip lari)
+    const bAnim = ud2.anim as AnimatedCharacter | undefined;
+    if (bAnim) {
+      if (b.bossLunge > 0) { bAnim.play('run') || bAnim.play('walk'); }
+      else { bAnim.play('idle'); }
+    }
     b.attackTimer -= dt;
     if (b.attackTimer <= 0 && b.bossLunge <= 0 && b.stagger <= 0) beginAttack();
   }
