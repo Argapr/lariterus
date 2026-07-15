@@ -15,8 +15,15 @@ export function updateCamera(dt: number) {
       sx = (Math.random() - 0.5) * game.shake * 1.2;
       sy = (Math.random() - 0.5) * game.shake * 1.2;
     }
-    camera.position.lerp(new THREE.Vector3(b.px * 0.5 + sx, 9 + sy, b.pz + 9.5), Math.min(1, dt * 4));
-    camera.lookAt(b.px * 0.35, 1.4, b.bossZ + 2.5);
+    // Intro: sorot bos dari dekat sebelum tempur mulai
+    if (b.introT > 0) {
+      camera.position.lerp(new THREE.Vector3(sx, 4.2 + sy, b.bossZ + 8.5), Math.min(1, dt * 3));
+      camera.lookAt(b.mesh.position.x * 0.6, 3.4, b.bossZ);
+      return;
+    }
+    // Tempur: lebih dekat & dramatis daripada kamera lari
+    camera.position.lerp(new THREE.Vector3(b.px * 0.45 + sx, 6.6 + sy, b.pz + 8.2), Math.min(1, dt * 4));
+    camera.lookAt(b.px * 0.3, 2.2, b.bossZ + 3.2);
     return;
   }
   let cx = game.laneX * 0.45;

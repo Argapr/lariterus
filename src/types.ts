@@ -43,9 +43,13 @@ export interface TrailCfg extends ShopItem {
 export type CollectionItem = PetCfg | TrailCfg;
 
 // ---------- Mode Petualangan ----------
+// Wujud fisik senjata (mesh yang dipegang + bentuk pelurunya)
+export type WeaponShape = 'pistol' | 'triple' | 'minigun' | 'cannon';
+
 export interface Weapon extends Omit<ShopItem, 'desc'> {
   desc: string;
   icon: string;
+  shape: WeaponShape;
   damage: number;
   fireRate: number;
   projSpeed: number;
@@ -106,6 +110,8 @@ export interface Projectile {
   vz: number;
   life: number;
   dmg?: number;
+  trailT?: number;   // pewaktu spawn partikel ekor tracer
+  color?: number;
 }
 export interface Telegraph {
   mesh: THREE.Mesh;
@@ -137,6 +143,11 @@ export interface BossState {
   bossVY: number; bossLunge: number;
   enraged: boolean; hitStop: number;
   dead: boolean; deadT: number;
+  // Intro & reaksi kena
+  introT: number;                    // hitung mundur intro bos (sorot + nama)
+  recoil: number;                    // dorongan mundur bos saat kena
+  stagger: number;                   // limbung: bos tak bisa menyerang
+  hitCombo: number; hitComboT: number; // pukulan beruntun → memicu limbung
 }
 
 export type GameStateName =

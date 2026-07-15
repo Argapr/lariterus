@@ -3,24 +3,52 @@
 // ============================================================
 import * as THREE from 'three';
 import { scene, camera, renderer } from '../core/three';
-import { game, world, menuState } from '../core/state';
+import { game, world, menuState, clearList } from '../core/state';
 import { store } from '../core/store';
 import { AudioFX } from '../core/audio';
 import { WEAPON_UPGRADE_MAX, weaponUpgradeCost } from '../core/constants';
 import { buildTheme } from '../gfx/world';
 import { buildBoss } from '../gfx/bossMesh';
+import { buildWeaponMesh, buildBullet } from '../gfx/weaponMesh';
+import { trailFX } from '../gfx/trail';
+import { petMesh } from '../gfx/petMesh';
 import { STAGES, stageUnlocked } from '../data/stages';
 import { WEAPONS, weaponDamage, BATTLE_BOOSTS } from '../data/weapons';
 import { THEMES } from '../data/themes';
 import { $, showScreen, toast, popup } from '../ui/dom';
 import { refreshMenu } from '../ui/menu';
 import { resetRun } from './run';
-import type { BossState, Projectile, Telegraph, Weapon } from '../types';
+import { endEvent } from './events';
+import type { BossState, Weapon } from '../types';
 
 const PLAYER_START_Z = 3;
-const BOSS_Z = -15;
+const BOSS_Z = -11;              // lebih dekat: bos terasa besar & mengancam
+const BOSS_SCALE = 1.5;          // bos diperbesar
+const BOSS_HIT_X = 2.6, BOSS_HIT_Z = 2.2;
+const LUNGE_DIST = 6.5;
+const INTRO_TIME = 2.4;          // sorot + nama bos sebelum "MULAI!"
+const DEATH_TIME = 0.9;          // dijalankan dalam slow-mo → terasa ~2 dtk
 const PX_MIN = -3.4, PX_MAX = 3.4;
 const PZ_MIN = -1, PZ_MAX = 5;
+
+// Senjata yang dipegang & bayangan kontak bos (dikelola per-tempur)
+let weaponMesh: THREE.Group | null = null;
+let muzzleObj: THREE.Object3D | null = null;
+let bossShadow: THREE.Mesh | null = null;
+
+/** Bersihkan sisa fase lari supaya arena fokus ke bos. */
+function cleanArena() {
+  endEvent();                       // hapus chaser & efek event yang tersisa
+  clearList(world.obstacles);
+  clearList(world.coins);
+  clearList(world.powerups);
+  trailFX.clear();
+  if (petMesh) petMesh.visible = false;
+}
+
+function setVignette(on: boolean) {
+  $('vignette').classList.toggle('hidden', !on);
+}
 
 // ============================================================
 // Peta stage
@@ -184,6 +212,7 @@ export function checkStageGoal() {
 export function enterPreboss() {
   game.state = 'preboss';
   game.battleBoost = null;
+  cleanArena();          // arena bersih sebelum tempur
   renderBoosts();
   showScreen('preboss');
 }
@@ -220,9 +249,29 @@ function clearBoss() {
     for (const t of game.boss.telegraphs) scene.remove(t.mesh);
     game.boss = null;
   }
+  if (weaponMesh) { game.charMesh.remove(weaponMesh); weaponMesh = null; muzzleObj = null; }
+  if (bossShadow) { scene.remove(bossShadow); bossShadow = null; }
   clearParticles();
+  setVignette(false);
+  $('boss-intro').classList.add('hidden');
+  if (petMesh) petMesh.visible = true;
   game.charMesh.visible = true;          // pulihkan bila mati saat blink invuln
   game.charMesh.rotation.set(0, 0, 0);   // hapus miring/roll dari tempur
+  // kembalikan pose lengan/kaki ke normal
+  const ud = game.charMesh.userData as { arms?: THREE.Group[]; legs?: THREE.Group[] };
+  if (ud.arms) for (const a of ud.arms) a.rotation.set(0, 0, 0);
+  if (ud.legs) for (const l of ud.legs) l.rotation.set(0, 0, 0);
+}
+
+/** Nama bos menghentak, lalu "MULAI!" */
+function playBossIntro(name: string) {
+  const el = $('boss-intro');
+  $('bi-name').textContent = name;
+  el.classList.remove('hidden', 'in', 'go');
+  void el.offsetWidth;               // restart animasi
+  el.classList.add('in');
+  window.setTimeout(() => { if (game.state === 'boss') el.classList.add('go'); }, 1500);
+  window.setTimeout(() => { el.classList.add('hidden'); el.classList.remove('in', 'go'); }, INTRO_TIME * 1000);
 }
 
 export function startBossFight() {
@@ -238,15 +287,35 @@ export function startBossFight() {
     else if (boost.id === 'shield') shieldHits = 3;
   }
 
+  cleanArena();  // pastikan tak ada koin/rintangan sisa lari di arena
+  setVignette(true);
+
   const weapon: Weapon = WEAPONS.find(w => w.id === store.equippedWeapon) || WEAPONS[0];
   const bossMesh = buildBoss(st.boss);
+  bossMesh.scale.setScalar(BOSS_SCALE);
   bossMesh.position.set(0, 0, BOSS_Z);
   bossMesh.rotation.y = Math.PI; // menghadap pemain
   scene.add(bossMesh);
 
-  // Bawa karakter pemain ke arena
+  // Bayangan kontak: bikin bos terasa berpijak & besar
+  bossShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(2.6, 24),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false })
+  );
+  bossShadow.rotation.x = -Math.PI / 2;
+  bossShadow.position.set(0, 0.02, BOSS_Z);
+  scene.add(bossShadow);
+
+  // Bawa karakter pemain ke arena + pasang senjata di tangan
   game.charMesh.rotation.set(0, 0, 0);
   game.charMesh.position.set(0, 0, PLAYER_START_Z);
+  weaponMesh = buildWeaponMesh(weapon.shape, weapon.projColor);
+  weaponMesh.position.set(0.34, 1.05, -0.35);
+  weaponMesh.userData.baseZ = -0.35;
+  weaponMesh.userData.kick = 0;
+  weaponMesh.userData.spin = 0;
+  game.charMesh.add(weaponMesh);
+  muzzleObj = weaponMesh.userData.muzzle as THREE.Object3D;
 
   const diff = 1 + game.stageIdx * 0.35;
   game.boss = {
@@ -263,12 +332,14 @@ export function startBossFight() {
     dashTime: 0, dashCd: 0, dashDX: 0, dashDZ: 0, faceAng: 0,
     windup: 0, pendingAttack: null, bossVY: 0, bossLunge: 0,
     enraged: false, hitStop: 0, dead: false, deadT: 0,
+    introT: INTRO_TIME, recoil: 0, stagger: 0, hitCombo: 0, hitComboT: 0,
   } as BossState;
 
   $('boss-name').textContent = st.boss.name;
   renderBossHUD();
   game.state = 'boss';
   showScreen('bosshud');
+  playBossIntro(st.boss.name);
 }
 
 function renderBossHUD() {
@@ -287,7 +358,11 @@ const windupTime = (b: BossState) => (b.enraged ? 0.5 : 0.72);
 const attackGap = (b: BossState) => Math.max(0.7, (b.enraged ? 1.2 : 2.2) - b.diff * 0.3);
 
 // ---------- Partikel & angka damage ----------
-interface Particle { mesh: THREE.Mesh; vx: number; vy: number; vz: number; life: number; max: number; }
+interface Particle {
+  mesh: THREE.Mesh; vx: number; vy: number; vz: number; life: number; max: number;
+  grow?: number;   // >0 = membesar (kilat benturan), default mengecil
+  g?: number;      // pengali gravitasi (0 = melayang, untuk ekor tracer)
+}
 let particles: Particle[] = [];
 const _pgeo = new THREE.SphereGeometry(0.12, 6, 6);
 const _v = new THREE.Vector3();
@@ -329,10 +404,40 @@ function updateParticles(dt: number) {
     const p = particles[i];
     p.life -= dt;
     p.mesh.position.x += p.vx * dt; p.mesh.position.y += p.vy * dt; p.mesh.position.z += p.vz * dt;
-    p.vy -= 14 * dt;
+    p.vy -= 14 * (p.g ?? 1) * dt;
     (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, p.life / p.max);
-    p.mesh.scale.multiplyScalar(1 - dt * 1.5);
+    p.mesh.scale.multiplyScalar(p.grow ? 1 + dt * p.grow : 1 - dt * 1.5);
     if (p.life <= 0) { scene.remove(p.mesh); (p.mesh.material as THREE.Material).dispose(); particles.splice(i, 1); }
+  }
+}
+
+/** Ekor cahaya di belakang peluru (melayang, cepat pudar). */
+function spawnTracer(x: number, y: number, z: number, color: number) {
+  const m = new THREE.Mesh(_pgeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false }));
+  m.position.set(x, y, z);
+  m.scale.setScalar(0.55);
+  scene.add(m);
+  particles.push({ mesh: m, vx: 0, vy: 0, vz: 0, life: 0.16, max: 0.16, g: 0 });
+}
+
+/** Kilat benturan yang mengembang di badan bos. */
+function impactFlash(x: number, y: number, z: number, color: number) {
+  const m = new THREE.Mesh(_pgeo, new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false }));
+  m.position.set(x, y, z);
+  m.scale.setScalar(1.2);
+  scene.add(m);
+  particles.push({ mesh: m, vx: 0, vy: 0, vz: 0, life: 0.16, max: 0.16, g: 0, grow: 16 });
+}
+
+/** Sentakan senjata setelah menembak + putaran laras minigun. */
+function updateWeapon(dt: number) {
+  if (!weaponMesh) return;
+  const ud = weaponMesh.userData as any;
+  ud.kick = Math.max(0, (ud.kick || 0) - dt * 0.9);
+  weaponMesh.position.z = ud.baseZ + ud.kick;
+  if (ud.spinner) {
+    ud.spin = Math.max(0, (ud.spin || 0) - dt * 26);
+    (ud.spinner as THREE.Group).rotation.z += ud.spin * dt;
   }
 }
 export function clearParticles() {
@@ -342,23 +447,35 @@ export function clearParticles() {
   if (layer) layer.innerHTML = '';
 }
 
-// Peluru pemain — mengarah ke bos + kilatan moncong
+// Peluru pemain — keluar dari moncong senjata, mengarah ke bos
+const _mp = new THREE.Vector3();
 function firePlayer() {
   const b = game.boss!;
   const w = b.weapon;
   const dmg = weaponDamage(w) * b.dmgMult;
-  const dirX = b.mesh.position.x - b.px, dirZ = b.mesh.position.z - b.pz;
+  // Titik moncong sebenarnya (ikut pose & senjata yang dipegang)
+  if (muzzleObj) muzzleObj.getWorldPosition(_mp);
+  else _mp.set(b.px, 1.05, b.pz - 0.7);
+  const dirX = b.mesh.position.x - _mp.x, dirZ = b.mesh.position.z - _mp.z;
   const len = Math.hypot(dirX, dirZ) || 1;
   const baseAng = Math.atan2(dirX / len, -dirZ / len);
-  muzzleFlash(b.px, 1.0, b.pz - 0.7, w.projColor);
+  muzzleFlash(_mp.x, _mp.y, _mp.z, w.projColor);
+  if (weaponMesh) {
+    const ud = weaponMesh.userData as any;
+    ud.kick = w.shape === 'cannon' ? 0.18 : 0.09;   // sentakan
+    ud.spin = 30;                                    // laras minigun berputar
+  }
   for (let p = 0; p < w.pellets; p++) {
     const ang = baseAng + (p - (w.pellets - 1) / 2) * w.spread;
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: w.projColor }));
-    mesh.position.set(b.px, 1.0, b.pz - 0.6);
+    const vx = Math.sin(ang) * w.projSpeed, vz = -Math.cos(ang) * w.projSpeed;
+    const mesh = buildBullet(w);
+    mesh.position.copy(_mp);
+    mesh.lookAt(_mp.x + vx, _mp.y, _mp.z + vz);      // memanjang searah terbang
     scene.add(mesh);
-    b.shots.push({ mesh, vx: Math.sin(ang) * w.projSpeed, vz: -Math.cos(ang) * w.projSpeed, life: 2.2, dmg });
+    b.shots.push({ mesh, vx, vz, life: 2.2, dmg, trailT: 0, color: w.projColor });
   }
-  AudioFX.beep(760, 0.05, 'square', 0.03, 120);
+  const boom = w.shape === 'cannon';
+  AudioFX.beep(boom ? 220 : 760, boom ? 0.12 : 0.05, 'square', 0.04, boom ? -60 : 120);
 }
 
 // Dodge/dash — meluncur cepat dengan i-frame
@@ -445,16 +562,119 @@ function bossPlayerHit() {
   if (b.playerHP <= 0) bossDefeat();
 }
 
+/** Limbung: bos kehilangan keseimbangan, serangan dibatalkan. */
+function triggerStagger(b: BossState) {
+  b.stagger = 0.9;
+  b.hitCombo = 0; b.hitComboT = 0;
+  b.windup = 0; b.pendingAttack = null;
+  for (const t of b.telegraphs) scene.remove(t.mesh);
+  b.telegraphs = [];
+  b.attackTimer = Math.max(b.attackTimer, 1.0);
+  popup('LIMBUNG! 💫');
+  spawnBurst(b.mesh.position.x, 3.6, b.mesh.position.z, 0xffe066, 12, 6);
+  AudioFX.beep(220, 0.25, 'square', 0.07, -80);
+}
+
+/** Mulai animasi tumbang (bukan langsung layar menang). */
+function startBossDeath() {
+  const b = game.boss!;
+  b.dead = true; b.deadT = DEATH_TIME;
+  b.windup = 0; b.pendingAttack = null; b.stagger = 0;
+  for (const t of b.telegraphs) scene.remove(t.mesh);
+  b.telegraphs = [];
+  for (const s of b.bshots) scene.remove(s.mesh);
+  b.bshots = [];
+  for (const s of b.shots) scene.remove(s.mesh);
+  b.shots = [];
+  game.shake = 0.7;
+  popup('💀 BOS TUMBANG!');
+  AudioFX.beep(90, 0.6, 'sawtooth', 0.16, -50);
+}
+
+/** Napas, goyang mengancam, sentakan mundur, bayangan kontak. */
+function animateBossBody(b: BossState, dt: number, now: number) {
+  const ud = b.mesh.userData as any;
+  const br = 1 + Math.sin(now * 0.0026) * 0.05;                 // napas naik-turun
+  if (ud.body) ud.body.scale.set(1.1, 1.15 * br, 1);
+  if (ud.head) ud.head.position.y = ud.headBaseY + Math.sin(now * 0.0026 + 0.6) * 0.07;
+  const lean = b.stagger > 0 ? 0.3 * (b.stagger / 0.9) : 0;     // limbung ke belakang
+  b.mesh.rotation.z = Math.sin(now * 0.0009) * 0.05 + lean * 0.5;
+  b.mesh.rotation.x = lean;
+  if (b.recoil > 0) b.recoil = Math.max(0, b.recoil - dt * 2.4);
+  if (b.bossVY > 0) b.bossVY = Math.max(0, b.bossVY - dt * 3.2);
+  if (bossShadow) {
+    bossShadow.position.set(b.mesh.position.x, 0.02, b.mesh.position.z);
+    const lift = Math.max(0, b.mesh.position.y - b.baseY);
+    const k = Math.max(0.5, 1 - lift * 0.16);
+    bossShadow.scale.setScalar(k);
+    (bossShadow.material as THREE.MeshBasicMaterial).opacity = 0.34 * k;
+  }
+}
+
+/** Pose tempur: kuda-kuda menghadap bos, senjata teracung. */
+function poseCombatStance(b: BossState, dt: number, moving: boolean) {
+  const ud = game.charMesh.userData as { arms?: THREE.Group[]; legs?: THREE.Group[] };
+  b.runPhase += dt * (moving ? 13 : 4);
+  const s = Math.sin(b.runPhase) * (moving ? 0.5 : 0.06);
+  if (ud.legs) {
+    ud.legs[0].rotation.x = s - 0.14;      // sedikit menekuk
+    ud.legs[1].rotation.x = -s - 0.14;
+  }
+  if (ud.arms) {
+    ud.arms[1].rotation.x = -1.5;          // tangan kanan memegang senjata
+    ud.arms[1].rotation.z = -0.16;
+    ud.arms[0].rotation.x = -1.24;         // tangan kiri menopang
+    ud.arms[0].rotation.z = 0.2;
+  }
+  updateWeapon(dt);
+}
+
 export function updateBoss(dt: number) {
   const b = game.boss;
   if (!b) return;
+  const now = performance.now();
+  const ch = game.charMesh;
+  const ud2 = b.mesh.userData as any;
+
+  // ---------- Animasi tumbang: dijalankan dalam slow-mo ----------
+  if (b.dead) {
+    b.deadT -= dt;
+    const k = THREE.MathUtils.clamp(1 - b.deadT / DEATH_TIME, 0, 1);
+    b.mesh.rotation.x = -k * 1.5;
+    b.mesh.rotation.z = Math.sin(k * 9) * 0.12 * (1 - k);
+    b.mesh.position.y = b.baseY + Math.sin(k * Math.PI) * 0.5 - k * 0.6;
+    if (Math.random() < 0.4) {
+      spawnBurst(
+        b.mesh.position.x + (Math.random() - 0.5) * 3.4,
+        0.8 + Math.random() * 3.6,
+        b.mesh.position.z + (Math.random() - 0.5) * 2.4,
+        Math.random() < 0.5 ? 0xffa030 : 0xff5030, 7, 7,
+      );
+    }
+    game.shake = Math.max(game.shake, 0.22);
+    if (bossShadow) (bossShadow.material as THREE.MeshBasicMaterial).opacity = 0.34 * (1 - k);
+    updateParticles(dt);
+    if (b.deadT <= 0) {
+      spawnBurst(b.mesh.position.x, 1.6, b.mesh.position.z, 0xffd060, 26, 11);
+      game.shake = 0.8;
+      bossWin();
+    }
+    return;
+  }
 
   // Hit-stop: bekukan sesaat untuk rasa benturan
   if (b.hitStop > 0) { b.hitStop -= dt; updateParticles(dt); return; }
 
-  const now = performance.now();
-  const ch = game.charMesh;
-  const ud2 = b.mesh.userData as any;
+  // ---------- Intro: sorot bos dulu, tempur belum jalan ----------
+  if (b.introT > 0) {
+    b.introT -= dt;
+    b.mesh.position.set(0, b.baseY + Math.abs(Math.sin(now * 0.003)) * 0.2, BOSS_Z);
+    animateBossBody(b, dt, now);
+    poseCombatStance(b, dt, false);
+    ch.position.set(b.px, 0, b.pz);
+    updateParticles(dt);
+    return;
+  }
 
   // ---------- Gerak pemain: dash atau lerp mulus ----------
   if (b.dashCd > 0) b.dashCd -= dt;
@@ -472,20 +692,14 @@ export function updateBoss(dt: number) {
     b.px = nx; b.pz = nz;
   }
 
-  // ---------- Animasi karakter lincah ----------
+  // ---------- Karakter: pose tempur menghadap bos ----------
   ch.position.set(b.px, 0, b.pz);
   const moving = Math.abs(b.velX) + Math.abs(b.velZ) > 0.4 || b.dashTime > 0;
-  const ud = ch.userData as { arms: THREE.Group[]; legs: THREE.Group[] };
-  b.runPhase += dt * (moving ? 16 : 6);
-  if (ud.legs) {
-    const s = Math.sin(b.runPhase) * (moving ? 0.7 : 0.15);
-    ud.legs[0].rotation.x = s; ud.legs[1].rotation.x = -s;
-    ud.arms[0].rotation.x = -s * 0.7; ud.arms[1].rotation.x = s * 0.7;
-  }
+  poseCombatStance(b, dt, moving);
   ch.rotation.z = THREE.MathUtils.clamp(-b.velX * 0.05, -0.5, 0.5);
   ch.rotation.y = THREE.MathUtils.clamp(-b.velX * 0.04, -0.4, 0.4);
   ch.rotation.x = b.dashTime > 0 ? -0.5 : (moving ? 0.05 : 0);
-  ch.position.y = b.dashTime > 0 ? 0.15 : Math.abs(Math.sin(b.runPhase)) * (moving ? 0.1 : 0.02);
+  ch.position.y = b.dashTime > 0 ? 0.15 : Math.abs(Math.sin(b.runPhase)) * (moving ? 0.06 : 0.015);
   if (b.invuln > 0) { b.invuln -= dt; ch.visible = b.dashTime > 0 ? true : (Math.floor(b.invuln * 24) % 2 === 0); }
   else ch.visible = true;
 
@@ -499,18 +713,21 @@ export function updateBoss(dt: number) {
   }
 
   // ---------- Gerak & animasi bos ----------
-  if (b.windup <= 0 && b.bossLunge <= 0) b.bossX = Math.sin(now * (b.enraged ? 0.0011 : 0.0007)) * 3.0;
+  if (b.windup <= 0 && b.bossLunge <= 0 && b.stagger <= 0) {
+    b.bossX = Math.sin(now * (b.enraged ? 0.0011 : 0.0007)) * 3.0;
+  }
   b.mesh.position.x = b.bossX;
   if (b.bossLunge > 0) {
     b.bossLunge -= dt;
     const k = b.bossLunge / LUNGE_TIME, fwd = Math.sin((1 - k) * Math.PI);
-    b.mesh.position.z = b.bossZ + fwd * 9;
+    b.mesh.position.z = b.bossZ + fwd * LUNGE_DIST;
     b.mesh.position.y = b.baseY + fwd * 0.7;
     if (fwd > 0.5 && Math.abs(b.mesh.position.z - b.pz) < 2 && Math.abs(b.bossX - b.px) < 1.7) bossPlayerHit();
   } else {
-    b.mesh.position.z = b.bossZ;
-    b.mesh.position.y = b.baseY + Math.abs(Math.sin(now * 0.003)) * 0.2;
+    b.mesh.position.z = b.bossZ - b.recoil * 2.0;   // tersentak mundur saat kena
+    b.mesh.position.y = b.baseY + Math.abs(Math.sin(now * 0.003)) * 0.2 - b.bossVY * 0.5;
   }
+  animateBossBody(b, dt, now);
   // kedip putih saat kena
   if (b.flash > 0) {
     b.flash -= dt;
@@ -518,6 +735,9 @@ export function updateBoss(dt: number) {
   } else if (ud2.bodyMat) {
     (ud2.bodyMat.color as THREE.Color).copy(ud2.baseColor);
   }
+  // pewaktu limbung & pukulan beruntun
+  if (b.stagger > 0) b.stagger = Math.max(0, b.stagger - dt);
+  if (b.hitComboT > 0) { b.hitComboT -= dt; if (b.hitComboT <= 0) b.hitCombo = 0; }
 
   // ---------- Tembakan otomatis pemain ----------
   b.fireTimer -= dt;
@@ -527,17 +747,28 @@ export function updateBoss(dt: number) {
   for (let i = b.shots.length - 1; i >= 0; i--) {
     const s = b.shots[i];
     s.mesh.position.x += s.vx * dt; s.mesh.position.z += s.vz * dt; s.life -= dt;
-    if (s.mesh.position.z <= b.mesh.position.z + 1.6 && Math.abs(s.mesh.position.x - b.mesh.position.x) < 1.9) {
+    // ekor cahaya tracer
+    s.trailT = (s.trailT ?? 0) - dt;
+    if (s.trailT <= 0) {
+      s.trailT = 0.03;
+      spawnTracer(s.mesh.position.x, s.mesh.position.y, s.mesh.position.z, s.color ?? 0xffe066);
+    }
+    if (s.mesh.position.z <= b.mesh.position.z + BOSS_HIT_Z && Math.abs(s.mesh.position.x - b.mesh.position.x) < BOSS_HIT_X) {
       const dmg = Math.round(s.dmg || 0);
       b.hp = Math.max(0, b.hp - dmg); b.flash = 0.14;
       const crit = dmg >= 20;
+      // reaksi kena: bos tersentak mundur + hitung pukulan beruntun
+      b.recoil = Math.min(0.4, b.recoil + (crit ? 0.28 : 0.1));
+      b.hitCombo++; b.hitComboT = 0.9;
       damageNumber(s.mesh.position.x, 2.4 + Math.random() * 0.6, s.mesh.position.z, String(dmg), crit ? 'crit' : '');
-      spawnBurst(s.mesh.position.x, 1.3, s.mesh.position.z, 0xffd060, crit ? 10 : 5, 5);
+      impactFlash(s.mesh.position.x, s.mesh.position.y, s.mesh.position.z, s.color ?? 0xffd060);
+      spawnBurst(s.mesh.position.x, s.mesh.position.y, s.mesh.position.z, 0xffd060, crit ? 14 : 6, crit ? 8 : 5);
       if (crit) b.hitStop = 0.05;
       scene.remove(s.mesh); b.shots.splice(i, 1);
       renderBossHUD();
       AudioFX.beep(320, 0.05, 'square', 0.05, -80);
-      if (b.hp <= 0) { bossWin(); return; }
+      if (b.hp <= 0) { startBossDeath(); return; }
+      if (b.hitCombo >= 6 && b.stagger <= 0) triggerStagger(b);
       continue;
     }
     if (s.life <= 0) { scene.remove(s.mesh); b.shots.splice(i, 1); }
@@ -552,7 +783,7 @@ export function updateBoss(dt: number) {
   } else {
     if (ud2.arms) { ud2.arms[0].rotation.x *= (1 - Math.min(1, dt * 8)); ud2.arms[1].rotation.x *= (1 - Math.min(1, dt * 8)); }
     b.attackTimer -= dt;
-    if (b.attackTimer <= 0 && b.bossLunge <= 0) beginAttack();
+    if (b.attackTimer <= 0 && b.bossLunge <= 0 && b.stagger <= 0) beginAttack();
   }
 
   // ---------- Peluru bos ----------
@@ -577,8 +808,10 @@ export function updateBoss(dt: number) {
     t.mesh.scale.setScalar(0.6 + k * 0.5);
     if (t.t >= t.max) {
       if (b.invuln <= 0 && Math.abs(b.px - t.x) < t.r && Math.abs(b.pz - t.z) < t.r) bossPlayerHit();
-      spawnBurst(t.x, 0.3, t.z, 0xff5030, 14, 8);
-      game.shake = Math.max(game.shake, 0.4);
+      spawnBurst(t.x, 0.3, t.z, 0xff5030, 16, 9);
+      spawnBurst(b.mesh.position.x, 0.2, b.mesh.position.z, 0xbba077, 10, 5); // debu di kaki bos
+      game.shake = Math.max(game.shake, 0.55);   // hentakan menggetarkan layar
+      b.bossVY = 1;                              // bos menghentak turun
       scene.remove(t.mesh); b.telegraphs.splice(i, 1);
       if (!game.boss) return;
     }

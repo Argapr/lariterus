@@ -55,9 +55,12 @@ export function buildBoss(cfg: BossCfg): THREE.Group {
   g.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
   g.userData = {
     arms,
+    body, head, belly,          // dipakai animasi napas & sentakan
     bodyMat, accMat,
     baseColor: new THREE.Color(cfg.color),
     accColor: new THREE.Color(cfg.accent),
+    bodyBaseY: body.position.y,
+    headBaseY: head.position.y,
   };
   return g;
 }

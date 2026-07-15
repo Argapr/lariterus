@@ -8,6 +8,7 @@ import { LANES, GRAVITY, JUMP_VY, SLIDE_TIME } from '../core/constants';
 import { AudioFX } from '../core/audio';
 import { powerDuration } from '../data/progression';
 import { buildCharacter } from '../gfx/characterMesh';
+import type { AnimatedCharacter } from '../gfx/animatedCharacter';
 import { petMesh } from '../gfx/petMesh';
 import { trailFX } from '../gfx/trail';
 import { popup } from '../ui/dom';
@@ -85,25 +86,40 @@ export function updatePlayer(dt: number) {
   ch.position.y = game.y;
   ch.rotation.z = (game.laneX - targetX) * 0.14;
 
-  const { arms, legs } = ch.userData as { arms: THREE.Group[]; legs: THREE.Group[] };
-  if (game.y > 0.01) {
-    legs[0].rotation.x = -0.7; legs[1].rotation.x = 0.5;
-    arms[0].rotation.x = -2.4; arms[1].rotation.x = -2.4;
-    ch.rotation.x = 0.12;
-  } else if (game.sliding > 0) {
-    ch.rotation.x = -1.15;
-    ch.position.y = -0.25;
-    legs[0].rotation.x = 0.3; legs[1].rotation.x = -0.2;
-    arms[0].rotation.x = -0.5; arms[1].rotation.x = -0.5;
+  const anim = ch.userData.anim as AnimatedCharacter | undefined;
+  if (anim) {
+    // --- Model ber-rig: pakai klip animasi asli ---
+    if (game.y > 0.01) { anim.play('jump') || anim.play('idle'); }
+    else if (game.sliding > 0) { anim.play('slide') || anim.play('roll') || anim.play('idle'); }
+    else if (game.state === 'playing') { anim.play('run') || anim.play('walk'); }
+    else { anim.play('idle') || anim.play('run'); }
+    ch.rotation.x = 0;
+    anim.update(dt);
   } else {
-    ch.rotation.x = 0.09;
-    game.runPhase += dt * (6 + game.speed * 0.55);
-    const s = Math.sin(game.runPhase);
-    legs[0].rotation.x = s * 1.0;
-    legs[1].rotation.x = -s * 1.0;
-    arms[0].rotation.x = -s * 0.9;
-    arms[1].rotation.x = s * 0.9;
-    ch.position.y = Math.abs(Math.cos(game.runPhase)) * 0.08;
+    // --- Karakter prosedural lama (bola & kapsul + gelombang sinus) ---
+    const ud = ch.userData as { arms?: THREE.Group[]; legs?: THREE.Group[] };
+    const arms = ud.arms, legs = ud.legs;
+    if (arms && legs) {
+      if (game.y > 0.01) {
+        legs[0].rotation.x = -0.7; legs[1].rotation.x = 0.5;
+        arms[0].rotation.x = -2.4; arms[1].rotation.x = -2.4;
+        ch.rotation.x = 0.12;
+      } else if (game.sliding > 0) {
+        ch.rotation.x = -1.15;
+        ch.position.y = -0.25;
+        legs[0].rotation.x = 0.3; legs[1].rotation.x = -0.2;
+        arms[0].rotation.x = -0.5; arms[1].rotation.x = -0.5;
+      } else {
+        ch.rotation.x = 0.09;
+        game.runPhase += dt * (6 + game.speed * 0.55);
+        const s = Math.sin(game.runPhase);
+        legs[0].rotation.x = s * 1.0;
+        legs[1].rotation.x = -s * 1.0;
+        arms[0].rotation.x = -s * 0.9;
+        arms[1].rotation.x = s * 0.9;
+        ch.position.y = Math.abs(Math.cos(game.runPhase)) * 0.08;
+      }
+    }
   }
 
   // Pet melayang mengikuti pemain

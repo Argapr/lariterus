@@ -3,13 +3,13 @@ import { store } from '../core/store';
 
 // price 0 = gratis; upgrade menaikkan damage
 export const WEAPONS: Weapon[] = [
-  { id: 'blaster', name: 'Blaster', desc: 'Senjata dasar — tembakan lurus', icon: '🔫', price: 0,
+  { id: 'blaster', name: 'Blaster', desc: 'Pistol bolt — tembakan lurus', icon: '🔫', price: 0, shape: 'pistol',
     damage: 9, fireRate: 2.6, projSpeed: 28, projColor: 0xffe066, pellets: 1, spread: 0 },
-  { id: 'spread', name: 'Penyebar', desc: 'Tiga peluru menyebar', icon: '🔱', price: 800,
+  { id: 'spread', name: 'Penyebar', desc: 'Tiga laras — peluru menyebar kipas', icon: '🔱', price: 800, shape: 'triple',
     damage: 6, fireRate: 1.9, projSpeed: 25, projColor: 0x7ee0ff, pellets: 3, spread: 0.26 },
-  { id: 'rapid', name: 'Rentetan', desc: 'Tembakan cepat tanpa henti', icon: '⚡', price: 1400,
+  { id: 'rapid', name: 'Rentetan', desc: 'Minigun — tracer cepat beruntun', icon: '⚡', price: 1400, shape: 'minigun',
     damage: 4, fireRate: 8, projSpeed: 32, projColor: 0xffa64d, pellets: 1, spread: 0.06 },
-  { id: 'cannon', name: 'Meriam', desc: 'Lambat tapi damage besar', icon: '💥', price: 2200,
+  { id: 'cannon', name: 'Meriam', desc: 'Bola besar lambat — ledakan besar', icon: '💥', price: 2200, shape: 'cannon',
     damage: 34, fireRate: 0.95, projSpeed: 22, projColor: 0xff5a5a, pellets: 1, spread: 0 },
 ];
 

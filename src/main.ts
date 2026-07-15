@@ -2,7 +2,7 @@
 // Entry point: bootstrap, wiring tombol/input, dan game loop
 // ============================================================
 import { renderer, scene, camera } from './core/three';
-import { game, menuState } from './core/state';
+import { game, world, menuState } from './core/state';
 import { store } from './core/store';
 import { AudioFX } from './core/audio';
 import { MULT_STEPS } from './core/constants';
@@ -12,6 +12,7 @@ import { THEMES } from './data/themes';
 import { buildTheme } from './gfx/world';
 import { applyPet } from './gfx/petMesh';
 import { trailFX } from './gfx/trail';
+import { AnimatedCharacter } from './gfx/animatedCharacter';
 
 import {
   setCharacter, updatePlayer, checkCollisions, doJump, doSlide, doMove,
@@ -205,7 +206,8 @@ function tick(now: number) {
     updatePlayer(dt * 0.15);
     if (game.reviveTimer <= 0) finalizeRun();
   } else if (game.state === 'boss') {
-    updateBoss(dt);
+    // Slow-mo saat bos tumbang biar momennya terasa
+    updateBoss(game.boss?.dead ? dt * 0.45 : dt);
   } else if (game.state === 'menu') {
     game.speed = 4;
     moveWorld(dt * 0.6);
@@ -222,8 +224,54 @@ function tick(now: number) {
 }
 requestAnimationFrame(tick);
 
+// ============================================================
+// SPIKE: uji model 3D ber-rig sebelum konversi besar-besaran
+// Dipakai dari console browser — lihat public/models/README.md
+// ============================================================
+let spikeChar: AnimatedCharacter | null = null;
+
+/** Tampilkan model .glb sebagai karakter (menggantikan yang prosedural). */
+async function spike(url: string, height = 2.05) {
+  const ac = await AnimatedCharacter.load(url, height);
+  if (game.charMesh) scene.remove(game.charMesh);
+  spikeChar = ac;
+  game.charMesh = ac.root;
+  ac.root.userData.anim = ac;
+  scene.add(ac.root);
+  const clips = ac.listClips();
+  if (!ac.play('idle')) ac.play(clips[0] ?? '');
+  return { klip: clips, memutar: ac.playing || '(tidak ada klip)' };
+}
+
+/** Intip nama klip di sebuah file tanpa menampilkannya. */
+async function spikeClips(url: string) {
+  const ac = await AnimatedCharacter.load(url);
+  const clips = ac.listClips();
+  ac.dispose();
+  return clips.length ? clips : '(file ini tidak punya klip animasi)';
+}
+
+/** Coba mainkan klip tertentu pada model spike. */
+function spikePlay(name: string) {
+  if (!spikeChar) return 'Belum ada model — jalankan __game.spike(url) dulu.';
+  return spikeChar.play(name)
+    ? 'memutar: ' + spikeChar.playing
+    : 'klip tidak ketemu: ' + name + ' | tersedia: ' + spikeChar.listClips().join(', ');
+}
+
+/** Kembali ke karakter prosedural lama. */
+function spikeOff() {
+  if (game.charMesh) scene.remove(game.charMesh);
+  if (spikeChar) { spikeChar.dispose(); spikeChar = null; }
+  setCharacter(CHARACTERS.find(c => c.id === store.charId) || CHARACTERS[0]);
+  return 'kembali ke karakter prosedural';
+}
+
 // Debug handle (opsional)
-(window as any).__game = { game, store, renderer, scene, camera, updateBoss, doDodge, updateCamera, checkStageGoal };
+(window as any).__game = {
+  game, world, store, renderer, scene, camera, updateBoss, doDodge, updateCamera, checkStageGoal,
+  spike, spikeClips, spikePlay, spikeOff,
+};
 
 // failStage diekspor ulang agar tree-shaking tidak membuang (dipakai run.ts)
 void failStage;
