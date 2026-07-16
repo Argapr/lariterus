@@ -684,7 +684,108 @@ html, body {
 
 .adv-bar { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
 
-/* --- Peta stage --- */
+/* --- Peta Petualangan (papan + jalur berkelok + node) --- */
+.map-board {
+  position: relative;
+  width: min(430px, 92vw);
+  height: min(480px, 56vh);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(90, 140, 230, 0.20), transparent 45%),
+    radial-gradient(circle at 80% 85%, rgba(247, 165, 29, 0.14), transparent 45%),
+    linear-gradient(180deg, #16203a, #0d1220);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: inset 0 0 46px rgba(0, 0, 0, 0.45), 0 10px 30px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.map-board::after { /* titik dekoratif ala peta */
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+.map-path { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mp-base, .mp-open {
+  fill: none;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 2 9;
+}
+.mp-base { stroke: rgba(255, 255, 255, 0.18); stroke-width: 5px; }
+.mp-open {
+  stroke: var(--orange);
+  stroke-width: 5px;
+  filter: drop-shadow(0 0 6px rgba(247, 165, 29, 0.65));
+}
+
+.map-nodes { position: absolute; inset: 0; }
+.map-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text);
+  transition: transform 0.12s;
+  z-index: 1;
+}
+.map-node:not(.locked):active { transform: translate(-50%, -50%) scale(0.93); }
+.map-node.locked { cursor: default; }
+.node-badge {
+  position: relative;
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Archivo Black', 'Archivo', sans-serif;
+  font-size: 20px; color: #17120a;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tc) 45%, #ffffff), var(--tc) 72%);
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.map-node.cleared .node-badge { border-color: #7dffa1; color: #0c3318; }
+.map-node.locked .node-badge {
+  filter: grayscale(0.9) brightness(0.6);
+  border-color: rgba(255, 255, 255, 0.25);
+  font-size: 17px;
+}
+.map-node.current .node-badge {
+  border-color: var(--orange-hi);
+  box-shadow: 0 0 20px rgba(247, 165, 29, 0.85), 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.map-node.current .node-badge::before { /* denyut stage aktif */
+  content: '';
+  position: absolute; inset: -3px;
+  border-radius: 50%;
+  border: 3px solid var(--orange-hi);
+  animation: node-pulse 1.4s ease-out infinite;
+}
+@keyframes node-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.map-node.current::after {
+  content: '▶ MULAI';
+  font-size: 9.5px; font-weight: 900; letter-spacing: 1px;
+  color: #17120a;
+  background: linear-gradient(180deg, var(--orange-hi), var(--orange));
+  border-radius: 999px;
+  padding: 2px 9px;
+  margin-top: 1px;
+  box-shadow: 0 0 10px rgba(247, 165, 29, 0.5);
+}
+.node-label {
+  font-size: 12.5px; font-weight: 800; letter-spacing: 0.3px;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+}
+.node-sub {
+  font-size: 10.5px; color: var(--dim);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+.map-node.locked .node-label, .map-node.locked .node-sub { opacity: 0.55; }
+
+/* --- Peta stage (daftar lama — masih dipakai layar lain) --- */
 .stage-list { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 12px; max-height: 52vh; overflow-y: auto; }
 .stage-node {
   display: flex; align-items: center; gap: 14px; text-align: left;
@@ -796,6 +897,172 @@ html, body {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
   20% { opacity: 1; transform: translate(-50%, -95%) scale(1.15); }
   100% { opacity: 0; transform: translate(-50%, -180%) scale(1); }
+}
+
+/* ============================================================
+   LOBI v2 — tata letak ala mobile game (latar studio hangat)
+   ============================================================ */
+#menu { padding: 0; }
+
+/* Kartu profil kiri-atas */
+#menu .profile-card {
+  position: fixed; top: 14px; left: 14px;
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  padding: 7px 18px 7px 8px;
+  box-shadow: 0 6px 18px rgba(120, 60, 10, 0.25);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+#menu .profile-card:active { transform: scale(0.96); }
+.pc-avatar {
+  width: 46px; height: 46px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 23px;
+  background: linear-gradient(180deg, var(--orange-hi), var(--orange));
+  border: 2px solid #fff;
+}
+.pc-info { display: flex; flex-direction: column; gap: 3px; text-align: left; }
+.pc-row { display: flex; align-items: center; gap: 8px; }
+.pc-name { font-size: 13px; font-weight: 900; color: #4a2c10; letter-spacing: 1px; }
+.pc-lv {
+  font-size: 10.5px; font-weight: 800; color: #fff;
+  background: linear-gradient(180deg, #6ec7ff, #3a8de0);
+  border-radius: 999px; padding: 1px 9px;
+}
+.pc-bar { width: 132px; height: 7px; border-radius: 4px; background: rgba(120, 60, 10, 0.18); overflow: hidden; display: block; }
+.pc-bar > span { display: block; height: 100%; width: 0; border-radius: 4px; background: linear-gradient(90deg, #ffd34d, #f7a51d); transition: width 0.3s; }
+.pc-best { font-size: 10px; font-weight: 800; color: #8a5a28; letter-spacing: 0.5px; }
+
+/* Mata uang kanan-atas */
+.top-right2 { position: fixed; top: 16px; right: 14px; display: flex; gap: 8px; }
+.pill2 {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  padding: 9px 15px;
+  font-size: 13.5px; font-weight: 800; color: #4a2c10;
+  box-shadow: 0 5px 14px rgba(120, 60, 10, 0.22);
+}
+
+/* Tombol bundar di sisi kiri/kanan */
+.orb-col { position: fixed; top: 98px; display: flex; flex-direction: column; gap: 12px; }
+.orb-left { left: 14px; }
+.orb-right { right: 14px; }
+.orb {
+  position: relative;
+  width: 58px; height: 58px;
+  border-radius: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 6px 14px rgba(120, 60, 10, 0.22);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  cursor: pointer; font-size: 21px;
+  transition: transform 0.1s;
+}
+.orb:active { transform: scale(0.9); }
+.orb i {
+  font-style: normal; font-size: 8.5px; font-weight: 900;
+  letter-spacing: 0.5px; color: #7a4a20; text-transform: uppercase;
+}
+.orb .dot-badge { top: 5px; right: 5px; }
+
+/* Panah carousel di tengah sisi */
+#menu .car-arrow {
+  position: fixed; top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(255, 255, 255, 0.95);
+  color: #7a4a20;
+}
+#menu #car-prev { left: 86px; }
+#menu #car-next { right: 86px; }
+#menu .car-arrow:active { transform: translateY(-50%) scale(0.9); }
+
+/* Nama karakter + dots */
+.char-caption {
+  position: fixed; left: 50%; bottom: 116px;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  text-align: center; pointer-events: none;
+}
+.char-caption h2 {
+  font-family: 'Archivo Black', 'Archivo', sans-serif; font-style: italic;
+  font-size: clamp(26px, 6vw, 40px); letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 0 3px 10px rgba(120, 50, 0, 0.45), 0 0 24px rgba(255, 255, 255, 0.35);
+}
+.char-caption p {
+  font-size: 13px; font-weight: 700; font-style: italic;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 2px 6px rgba(120, 50, 0, 0.55);
+}
+.char-caption .dots { pointer-events: auto; margin-top: 4px; }
+#menu .dot { background: rgba(120, 60, 10, 0.3); }
+#menu .dot.on { background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.85); }
+
+/* Tab konten kiri-bawah (segmented) */
+.seg-tabs {
+  position: fixed; left: 14px; bottom: 16px;
+  display: flex; gap: 4px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: 0 6px 14px rgba(120, 60, 10, 0.2);
+}
+.seg-tabs .tab {
+  border: none; background: transparent; cursor: pointer;
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-size: 11.5px; font-weight: 900; letter-spacing: 0.3px;
+  color: #7a4a20;
+}
+.seg-tabs .tab.active {
+  background: linear-gradient(180deg, var(--orange-hi), var(--orange));
+  color: #17120a;
+  box-shadow: 0 2px 8px rgba(200, 110, 10, 0.5);
+}
+
+/* Aksi utama kanan-bawah */
+.play-stack {
+  position: fixed; right: 16px; bottom: 16px;
+  display: flex; flex-direction: column; gap: 9px; align-items: stretch;
+}
+.btn-play2 {
+  border: 3px solid #fff; outline: none; cursor: pointer;
+  font-family: 'Archivo Black', 'Archivo', sans-serif; font-style: italic;
+  font-size: clamp(19px, 4.5vw, 25px); letter-spacing: 2px;
+  color: #17120a;
+  background: linear-gradient(180deg, var(--orange-hi), var(--orange));
+  border-radius: 22px;
+  padding: 16px 46px;
+  box-shadow: 0 8px 22px rgba(200, 110, 10, 0.45), var(--glow-orange);
+  transition: transform 0.1s;
+}
+.btn-play2:active { transform: scale(0.95); }
+.btn-play2.buy { font-size: clamp(14px, 3.6vw, 18px); }
+.btn-adv2 {
+  border: 2px solid rgba(255, 255, 255, 0.92); outline: none; cursor: pointer;
+  font-weight: 900; font-size: 13px; letter-spacing: 1.5px;
+  color: #1a5a8a;
+  background: rgba(255, 255, 255, 0.84);
+  border-radius: 18px;
+  padding: 11px 20px;
+  box-shadow: 0 5px 14px rgba(120, 60, 10, 0.22);
+  transition: transform 0.1s;
+}
+.btn-adv2:active { transform: scale(0.95); }
+
+/* Layar sempit: rapatkan panah & kecilkan bar profil */
+@media (max-width: 560px) {
+  #menu #car-prev { left: 76px; }
+  #menu #car-next { right: 76px; }
+  .pc-bar { width: 92px; }
+  .pill2 { padding: 8px 11px; font-size: 12px; }
 }
 
 /* ============================================================

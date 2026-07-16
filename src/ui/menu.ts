@@ -8,7 +8,7 @@ import { CHARACTERS } from '../data/characters';
 import { THEMES } from '../data/themes';
 import { KOLEKSI } from '../data/collections';
 import { todayKey } from '../core/util';
-import { buildTheme } from '../gfx/world';
+import { buildTheme, setStudioMode } from '../gfx/world';
 import { applyPet } from '../gfx/petMesh';
 import { trailFX } from '../gfx/trail';
 import { setCharacter } from '../systems/player';
@@ -56,7 +56,9 @@ export function refreshMenu() {
   $('car-dots').querySelectorAll<HTMLElement>('.dot').forEach(d =>
     d.addEventListener('click', () => carouselGo(+d.dataset.i!)));
 
-  // Pratinjau 3D langsung + pilih otomatis jika sudah dimiliki
+  // Pratinjau 3D langsung + pilih otomatis jika sudah dimiliki.
+  // Tab karakter & koleksi pakai latar studio bersih; tab tema pamerkan dunianya.
+  setStudioMode(menuState.tab !== 'tema');
   if (menuState.tab === 'tema') {
     trailFX.previewId = null;
     applyPet();

@@ -13,7 +13,7 @@ import { POWER_INFO } from '../core/constants';
 import { powerDuration } from '../data/progression';
 import { todayKey } from '../core/util';
 import { trailFX } from '../gfx/trail';
-import { spawnDeco } from '../gfx/world';
+import { spawnDeco, setStudioMode } from '../gfx/world';
 import { spawnPattern } from './spawn';
 import { EVENTS, startEvent, endEvent } from './events';
 import { registerNearMiss } from './player';
@@ -159,6 +159,7 @@ export function moveWorld(dt: number) {
 export function startGame() {
   AudioFX.click();
   game.mode = 'endless';
+  setStudioMode(false); // keluar dari latar studio lobi
   resetRun();
   const v = store.vouchers;
   const used: string[] = [];

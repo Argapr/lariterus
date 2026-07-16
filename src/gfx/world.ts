@@ -13,7 +13,78 @@ let groundPlane: THREE.Mesh | null = null;
 scene.add(world.group);
 scene.add(world.scenery);
 
+// ============================================================
+// Mode studio: latar bersih ala lobi mobile untuk pamer karakter
+// (dunia disembunyikan, diganti gradasi hangat + watermark + bayangan lembut)
+// ============================================================
+let studioOn = false;
+let studioGroup: THREE.Group | null = null;
+let studioBg: THREE.Texture | null = null;
+let savedFog: THREE.Fog | null = null;
+
+function makeStudioAssets() {
+  studioBg = canvasTexture(512, 1024, (ctx, w, h) => {
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#ffe9cd');
+    grad.addColorStop(0.55, '#ffbe85');
+    grad.addColorStop(1, '#ff9257');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    // Watermark besar miring, khas lobi mobile game
+    ctx.save();
+    ctx.translate(w / 2, h * 0.45);
+    ctx.rotate(-0.14);
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.textAlign = 'center';
+    ctx.font = "italic 900 118px 'Archivo Black', 'Archivo', sans-serif";
+    ctx.fillText('LARI', 0, -30);
+    ctx.fillText('TERUS!', 0, 108);
+    ctx.restore();
+  });
+  studioGroup = new THREE.Group();
+  // Blob gelap lembut di kaki karakter
+  const blobTex = canvasTexture(256, 256, (ctx, w, h) => {
+    const g = ctx.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(60,30,10,0.30)');
+    g.addColorStop(1, 'rgba(60,30,10,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(1.7, 36),
+    new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
+  blob.rotation.x = -Math.PI / 2;
+  blob.position.y = 0.012;
+  studioGroup.add(blob);
+  // Penangkap bayangan asli dari matahari
+  const catcher = new THREE.Mesh(new THREE.CircleGeometry(2.4, 36),
+    new THREE.ShadowMaterial({ opacity: 0.25 }));
+  catcher.rotation.x = -Math.PI / 2;
+  catcher.position.y = 0.02;
+  catcher.receiveShadow = true;
+  studioGroup.add(catcher);
+  scene.add(studioGroup);
+}
+
+export function setStudioMode(on: boolean) {
+  if (studioOn === on) return;
+  studioOn = on;
+  if (on && !studioGroup) makeStudioAssets();
+  world.group.visible = !on;
+  world.scenery.visible = !on;
+  if (groundPlane) groundPlane.visible = !on;
+  if (studioGroup) studioGroup.visible = on;
+  if (on) {
+    savedFog = scene.fog as THREE.Fog | null;
+    scene.fog = null;
+    scene.background = studioBg;
+  } else {
+    scene.fog = savedFog;
+    scene.background = null;
+  }
+}
+
 export function buildTheme(theme: ThemeCfg) {
+  setStudioMode(false); // membangun tema selalu kembali ke dunia normal
   clearList(world.roadSegs);
   clearList(world.decos);
   clearList(world.obstacles);

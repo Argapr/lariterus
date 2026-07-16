@@ -13,75 +13,58 @@
 <body>
   <canvas id="game-canvas"></canvas>
 
-  <!-- ===== MENU UTAMA ===== -->
+  <!-- ===== MENU UTAMA (lobi ala mobile game) ===== -->
   <div id="menu" class="screen">
-    <header class="topbar">
-      <div class="logo">Lari Terus!<span class="logo-sub">3D Endless Runner</span></div>
-      <div class="topbar-right">
-        <button id="btn-daily" class="icon-btn" aria-label="Hadiah harian">🎁<span id="daily-dot" class="dot-badge hidden"></span></button>
-        <button id="btn-wheel" class="icon-btn" aria-label="Roda hadiah">🎡<span id="wheel-dot" class="dot-badge hidden"></span></button>
-        <div class="coin-pill">🪙 <span id="menu-coins-val">0</span></div>
-        <button class="avatar" id="btn-profile" aria-label="Profil">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
-        </button>
-      </div>
-    </header>
+    <!-- Kartu profil kiri-atas -->
+    <button class="profile-card" id="btn-profile" aria-label="Profil">
+      <span class="pc-avatar">🏃</span>
+      <span class="pc-info">
+        <span class="pc-row"><b class="pc-name">PELARI</b><span class="pc-lv">Lv <span id="side-level">1</span></span></span>
+        <span class="pc-bar"><span id="level-fill"></span></span>
+        <span class="pc-best" id="menu-best">🏆 SKOR TERBAIK: 0</span>
+      </span>
+    </button>
 
-    <div id="menu-best" class="best-pill">🏆 SKOR TERBAIK: 0</div>
-
-    <!-- Kartu samping (layar lebar) -->
-    <aside class="side-cards">
-      <div class="side-card">
-        <div class="side-label">🏆 Skor Terbaik</div>
-        <div class="side-value" id="side-best">0</div>
-      </div>
-      <div class="side-card">
-        <div class="side-label">Level <span class="side-level-num" id="side-level">1</span></div>
-        <div class="level-bar"><div id="level-fill"></div></div>
-      </div>
-    </aside>
-
-    <!-- Area tengah: karakter 3D tampil dari canvas di belakang -->
-    <div class="menu-center">
-      <button class="car-arrow" id="car-prev" aria-label="Sebelumnya">‹</button>
-      <button class="car-arrow" id="car-next" aria-label="Berikutnya">›</button>
+    <!-- Mata uang kanan-atas -->
+    <div class="top-right2">
+      <div class="pill2">🪙 <b id="menu-coins-val">0</b></div>
+      <div class="pill2">🏆 <b id="side-best">0</b></div>
     </div>
 
-    <div class="car-info">
-      <h2 id="car-name">KOMO</h2>
-      <p id="car-desc">Si Dino Sahabat</p>
+    <!-- Kolom tombol bundar kiri -->
+    <div class="orb-col orb-left">
+      <button id="btn-daily" class="orb" aria-label="Hadiah harian">🎁<i>Hadiah</i><span id="daily-dot" class="dot-badge hidden"></span></button>
+      <button id="btn-wheel" class="orb" aria-label="Roda hadiah">🎡<i>Roda</i><span id="wheel-dot" class="dot-badge hidden"></span></button>
+      <button class="orb tab" data-tab="misi">🎯<i>Misi</i></button>
+    </div>
+    <!-- Kolom tombol bundar kanan -->
+    <div class="orb-col orb-right">
+      <button class="orb tab" data-tab="peringkat">🏅<i>Peringkat</i></button>
     </div>
 
-    <div class="menu-bottom">
-      <div class="play-row">
-        <button id="btn-play" class="btn-main">▷&nbsp; MAIN</button>
-        <button id="btn-adventure" class="btn-adventure">🗺️<span>PETUALANGAN</span></button>
-      </div>
+    <!-- Panah carousel -->
+    <button class="car-arrow" id="car-prev" aria-label="Sebelumnya">‹</button>
+    <button class="car-arrow" id="car-next" aria-label="Berikutnya">›</button>
+
+    <!-- Nama karakter + titik carousel (tengah-bawah) -->
+    <div class="char-caption">
+      <h2 id="car-name">RIO</h2>
+      <p id="car-desc">Penembak pemberani</p>
       <div id="car-dots" class="dots"></div>
     </div>
 
-    <nav class="tabbar">
-      <button class="tab active" data-tab="karakter">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5 21c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>
-        <span>Karakter</span>
-      </button>
-      <button class="tab" data-tab="tema">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18L9 8l4 6 3-4 5 8z"/></svg>
-        <span>Tema</span>
-      </button>
-      <button class="tab" data-tab="koleksi">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.5 5.5L20 9.5l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-1z"/></svg>
-        <span>Koleksi</span>
-      </button>
-      <button class="tab" data-tab="misi">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h6"/></svg>
-        <span>Misi</span>
-      </button>
-      <button class="tab" data-tab="peringkat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="12" width="4" height="8"/><rect x="10" y="6" width="4" height="14"/><rect x="16" y="10" width="4" height="10"/></svg>
-        <span>Peringkat</span>
-      </button>
+    <!-- Tab konten (kiri-bawah) -->
+    <nav class="seg-tabs">
+      <button class="tab active" data-tab="karakter">👤 Karakter</button>
+      <button class="tab" data-tab="tema">🏔️ Tema</button>
+      <button class="tab" data-tab="koleksi">⭐ Koleksi</button>
     </nav>
+
+    <!-- Aksi utama (kanan-bawah) -->
+    <div class="play-stack">
+      <button id="btn-play" class="btn-play2">▷&nbsp; MAIN</button>
+      <button id="btn-adventure" class="btn-adv2">🗺️&nbsp; PETUALANGAN</button>
+    </div>
   </div>
 
   <!-- ===== HUD ===== -->
@@ -202,13 +185,15 @@
 
   <!-- ===== PETA STAGE ===== -->
   <div id="map-screen" class="screen overlay hidden">
-    <h2 class="ov-title">🗺️ PETUALANGAN</h2>
-    <p class="overlay-sub">Taklukkan bos di ujung tiap stage</p>
+    <h2 class="ov-title">🗺️ PETA PETUALANGAN</h2>
     <div class="adv-bar">
       <div class="coin-pill">🪙 <span id="map-coins">0</span></div>
       <button id="btn-arsenal" class="btn-dark small">🔫 <span id="map-weapon">Blaster</span></button>
     </div>
-    <div id="stage-list" class="stage-list"></div>
+    <div id="map-board" class="map-board">
+      <svg id="map-path" class="map-path" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+      <div id="stage-list" class="map-nodes"></div>
+    </div>
     <button id="btn-map-close" class="btn-dark">Tutup</button>
   </div>
 

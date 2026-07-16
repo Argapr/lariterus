@@ -71,20 +71,41 @@ export function renderMap() {
   const eq = WEAPONS.find(w => w.id === store.equippedWeapon) || WEAPONS[0];
   $('map-weapon').textContent = eq.name;
   const cleared = store.clearedStages;
+
+  // Posisi node berkelok (serpentine) dari bawah ke atas, dalam persen papan
+  const n = STAGES.length;
+  const pts = STAGES.map((_, i) => ({
+    x: i % 2 === 0 ? 27 : 73,
+    y: n === 1 ? 50 : 85 - i * (70 / (n - 1)),
+  }));
+
+  // Jalur S-curve antar node: penuh (redup) + bagian yang sudah terbuka (menyala)
+  const seg = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    ` C ${a.x} ${(a.y + b.y) / 2}, ${b.x} ${(a.y + b.y) / 2}, ${b.x} ${b.y}`;
+  let dAll = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < n; i++) dAll += seg(pts[i - 1], pts[i]);
+  let lastOpen = 0;
+  for (let i = 0; i < n; i++) if (stageUnlocked(i, cleared)) lastOpen = i;
+  let dOpen = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i <= lastOpen; i++) dOpen += seg(pts[i - 1], pts[i]);
+  $('map-path').innerHTML = `<path class="mp-base" d="${dAll}"/>`
+    + (lastOpen > 0 ? `<path class="mp-open" d="${dOpen}"/>` : '');
+
   $('stage-list').innerHTML = STAGES.map((st, i) => {
     const unlocked = stageUnlocked(i, cleared);
     const done = cleared.includes(st.id);
-    const cls = 'stage-node' + (done ? ' cleared' : '') + (unlocked ? '' : ' locked');
+    const current = unlocked && !done;   // stage berikutnya yang harus dimainkan
+    const theme = THEMES.find(t => t.id === st.theme);
+    const cls = 'map-node' + (done ? ' cleared' : '') + (current ? ' current' : '') + (unlocked ? '' : ' locked');
     const badge = done ? '✓' : unlocked ? String(i + 1) : '🔒';
-    return `<button class="${cls}" data-i="${i}" ${unlocked ? '' : 'disabled'}>
-      <div class="stage-num">${badge}</div>
-      <div>
-        <div class="stage-name">${st.name}</div>
-        <div class="stage-sub">Lari ${st.distance} m · Bos: ${st.boss.name}${done ? ' · Tuntas' : ''}</div>
-      </div>
+    return `<button class="${cls}" data-i="${i}" ${unlocked ? '' : 'disabled'}
+      style="left:${pts[i].x}%;top:${pts[i].y}%">
+      <span class="node-badge" style="--tc:${theme?.swatch ?? '#f7a51d'}">${badge}</span>
+      <span class="node-label">${st.name}</span>
+      <span class="node-sub">👹 ${st.boss.name}</span>
     </button>`;
   }).join('');
-  $('stage-list').querySelectorAll<HTMLButtonElement>('.stage-node').forEach(b => {
+  $('stage-list').querySelectorAll<HTMLButtonElement>('.map-node').forEach(b => {
     if (b.disabled) return;
     b.addEventListener('click', () => openStage(+b.dataset.i!));
   });
