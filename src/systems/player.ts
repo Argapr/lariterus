@@ -157,20 +157,35 @@ export function updatePlayer(dt: number) {
     }
   }
 
-  // Pet melayang mengikuti pemain
+  // Pet melayang mengikuti pemain (di halaman koleksi: mengorbit sesuai putaran)
   if (petMesh) {
     const t = performance.now() * 0.001;
-    const tx = game.laneX + 1.05;
-    const ty = 1.55 + game.y * 0.6 + Math.sin(t * 2.2) * 0.12;
+    let tx: number, ty: number, tz: number;
+    if (menuState.collectionSelect) {
+      // Pet menempel di sisi KIRI karakter & ikut berputar bersamanya,
+      // menghadap arah yang sama (bukan terbalik). Offset di ruang lokal karakter.
+      const a = menuState.spin;
+      const ox = -0.95, oz = 0.05; // (-X) = sisi kiri karakter saat menghadap depan
+      const cos = Math.cos(a), sin = Math.sin(a);
+      tx = game.laneX + ox * cos + oz * sin;
+      tz = -ox * sin + oz * cos;
+      ty = 1.3 + Math.sin(t * 2.2) * 0.1;
+      petMesh.rotation.y = a; // hadap sama seperti karakter
+    } else {
+      tx = game.laneX + 1.05;
+      tz = 0.35;
+      ty = 1.55 + game.y * 0.6 + Math.sin(t * 2.2) * 0.12;
+    }
     petMesh.position.x += (tx - petMesh.position.x) * Math.min(1, dt * 6);
     petMesh.position.y += (ty - petMesh.position.y) * Math.min(1, dt * 6);
-    petMesh.position.z = 0.35;
+    petMesh.position.z += (tz - petMesh.position.z) * Math.min(1, dt * 6);
     petMesh.rotation.z = Math.sin(t * 2.2) * 0.1;
     if ((petMesh.userData as any).anim) (petMesh.userData as any).anim(t);
   }
 
   const emitTrail = (game.state === 'playing' && game.y <= 0.01 && game.sliding <= 0)
-    || (game.state === 'menu' && menuState.tab === 'koleksi' && trailFX.previewId);
+    || (game.state === 'menu' && trailFX.previewId
+        && (menuState.tab === 'koleksi' || menuState.collectionSelect));
   if (emitTrail) {
     trailFX.timer -= dt;
     if (trailFX.timer <= 0) {

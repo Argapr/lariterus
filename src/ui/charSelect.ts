@@ -162,6 +162,7 @@ export function openCharSelect() {
   AudioFX.click();
   selectedId = store.charId;
   menuState.charSelect = true;
+  menuState.spin = 0;
   const cur = CHARACTERS.find(c => c.id === selectedId);
   if (cur) setCharacter(cur);
   renderGrid();

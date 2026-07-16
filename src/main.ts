@@ -31,6 +31,8 @@ import { carouselItem, carouselMove, tryBuy, refreshMenu, setTab } from './ui/me
 import { renderDaily, claimDaily, renderWheel, spinWheel, wheel, openChest, maybeShowChest, dailyInfo } from './ui/rewards';
 import { renderProfile } from './ui/progress';
 import { openCharSelect, initCharSelect, charSelectVisible } from './ui/charSelect';
+import { openCollection, initCollectionSelect, collectionVisible } from './ui/collectionSelect';
+import { initPreviewRotate } from './ui/previewRotate';
 
 // ============================================================
 // Bootstrap
@@ -70,11 +72,14 @@ on('car-prev', () => carouselMove(-1));
 on('car-next', () => carouselMove(1));
 document.querySelectorAll<HTMLElement>('.tab').forEach(b =>
   b.addEventListener('click', () => {
-    // Karakter dipilih lewat halaman sendiri (bukan carousel panah)
+    // Karakter & Koleksi punya halaman sendiri (bukan carousel panah)
     if (b.dataset.tab === 'karakter') { setTab('karakter'); openCharSelect(); return; }
+    if (b.dataset.tab === 'koleksi') { openCollection(); return; }
     setTab(b.dataset.tab!);
   }));
 initCharSelect();
+initCollectionSelect();
+initPreviewRotate();
 
 // --- HUD / pause / gameover / revive ---
 on('btn-pause', () => { AudioFX.click(); pauseGame(); });
@@ -128,6 +133,11 @@ window.addEventListener('keydown', (e) => {
     if (charSelectVisible()) {
       if (e.code === 'Enter' || e.code === 'Space') $('btn-chars-confirm').click();
       else if (e.code === 'Escape') $('btn-chars-close').click();
+      return;
+    }
+    if (collectionVisible()) {
+      if (e.code === 'Enter' || e.code === 'Space') $('btn-col-confirm').click();
+      else if (e.code === 'Escape') $('btn-col-close').click();
       return;
     }
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') carouselMove(-1);
@@ -226,7 +236,10 @@ function tick(now: number) {
     game.nextSpawn = game.distance + 999;
     updatePlayer(dt);
     trailFX.update(dt, game.speed * dt * 0.6);
-    game.charMesh.rotation.y = Math.sin(now * 0.0006) * 0.3;
+    // Halaman pilih (karakter/koleksi): putaran dikontrol geseran; selain itu ayun lembut
+    game.charMesh.rotation.y = (menuState.charSelect || menuState.collectionSelect)
+      ? menuState.spin
+      : Math.sin(now * 0.0006) * 0.3;
   } else if (game.state === 'gameover') {
     const anim = game.charMesh.userData.anim as AnimatedCharacter | undefined;
     if (anim) {
@@ -288,8 +301,8 @@ function spikeOff() {
 
 // Debug handle (opsional)
 (window as any).__game = {
-  game, world, store, renderer, scene, camera, updateBoss, doDodge, updateCamera, checkStageGoal,
-  updatePlayer, moveWorld, spike, spikeClips, spikePlay, spikeOff,
+  game, world, store, menuState, renderer, scene, camera, updateBoss, doDodge, updateCamera, checkStageGoal,
+  updatePlayer, moveWorld, trailFX, spike, spikeClips, spikePlay, spikeOff,
 };
 
 // failStage diekspor ulang agar tree-shaking tidak membuang (dipakai run.ts)

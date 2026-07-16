@@ -14,6 +14,7 @@ export const screens: Record<string, HTMLElement> = {
   preboss: $('preboss-screen'), bosshud: $('bosshud'), victory: $('victory-screen'),
   defeat: $('defeat-screen'),
   chars: $('chars-screen'),
+  collection: $('collection-screen'),
 };
 
 export function showScreen(...names: string[]) {

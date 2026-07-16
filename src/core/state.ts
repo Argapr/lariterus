@@ -63,6 +63,9 @@ export const menuState = {
   stagePick: 0,
   arsenalReturn: 'map' as 'map' | 'stage',
   charSelect: false, // halaman pilih karakter terbuka (kamera geser karakter ke kanan)
+  collectionSelect: false, // halaman koleksi (pet/jejak) terbuka
+  colTab: 'pet' as 'pet' | 'trail', // sub-tab di halaman koleksi
+  spin: 0, // sudut putar pratinjau (digeser untuk memutar karakter)
 };
 
 export function clearList(list: { mesh?: THREE.Object3D }[] | THREE.Object3D[]) {

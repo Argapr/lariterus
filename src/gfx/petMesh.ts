@@ -5,8 +5,11 @@ import * as THREE from 'three';
 import { scene } from '../core/three';
 import { store } from '../core/store';
 import { toon } from './textures';
+import { instantiate, normalizeModel } from './assets';
+import { PETS } from '../data/collections';
 
 export let petMesh: THREE.Group | null = null;
+let petToken = 0; // batalkan pemuatan model yang tersusul (ganti pet cepat)
 
 export function buildPetMesh(id: string): THREE.Group {
   const g = new THREE.Group();
@@ -77,13 +80,41 @@ export function buildPetMesh(id: string): THREE.Group {
   return g;
 }
 
+// Muat pet model .glb ber-rig: dinormalisasi kecil, mixer dijalankan lewat userData.anim
+async function loadPetModel(url: string, height: number, token: number) {
+  const { root, clips } = await instantiate(url);
+  if (token !== petToken) return; // sudah tersusul pilihan lain
+  const holder = new THREE.Group();
+  holder.add(root);
+  normalizeModel(root, height);
+  root.rotation.y = Math.PI;      // hadap depan (-Z), searah lari
+  const mixer = new THREE.AnimationMixer(root);
+  const idle = clips.find(c => /flying_?idle|idle/i.test(c.name)) ?? clips[0];
+  if (idle) mixer.clipAction(idle).play();
+  let last = 0;
+  holder.userData.anim = (t: number) => {
+    const dt = last ? Math.min(0.05, t - last) : 0;
+    last = t;
+    mixer.update(dt);
+  };
+  if (petMesh) scene.remove(petMesh);
+  holder.position.set(1.1, 1.6, 0.3);
+  petMesh = holder;
+  scene.add(holder);
+}
+
 // Tampilkan pet: default pet yang dipakai; previewId untuk pratinjau di shop
 export function applyPet(previewId?: string) {
   const id = previewId !== undefined ? previewId : store.petId;
+  const token = ++petToken;                    // batalkan model in-flight
   if (petMesh) { scene.remove(petMesh); petMesh = null; }
-  if (id !== 'nopet') {
-    petMesh = buildPetMesh(id);
-    petMesh.position.set(1.1, 1.6, 0.3);
-    scene.add(petMesh);
+  if (id === 'nopet') return;
+  const cfg = PETS.find(p => p.id === id);
+  if (cfg?.model) {
+    void loadPetModel(cfg.model, cfg.petHeight ?? 0.9, token);
+    return;
   }
+  petMesh = buildPetMesh(id);
+  petMesh.position.set(1.1, 1.6, 0.3);
+  scene.add(petMesh);
 }

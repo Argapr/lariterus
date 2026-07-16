@@ -36,6 +36,10 @@ export interface ThemeCfg extends ShopItem {
 export interface PetCfg extends ShopItem {
   kind: 'pet';
   swatch: string;
+  /** Kalau diisi: pet memakai model .glb ber-rig (buildPetMesh prosedural jadi fallback). */
+  model?: string;
+  /** Tinggi pet setelah dinormalisasi (default 0.9). */
+  petHeight?: number;
 }
 export interface TrailCfg extends ShopItem {
   kind: 'trail';

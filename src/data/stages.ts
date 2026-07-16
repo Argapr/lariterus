@@ -15,6 +15,9 @@ export const STAGES: Stage[] = [
   { id: 'st4', name: 'Puncak Salju', theme: 'salju', distance: 1050,
     boss: { name: 'Ular Salju', hp: 480, color: 0xdfeaf5, accent: 0x8fb8dd, horns: 5,
       model: '/models/bosses/snake.glb', size: 3.4 } },
+  { id: 'st5', name: 'Pantai Akhir', theme: 'pantai', distance: 1300,
+    boss: { name: 'Raja Pulu', hp: 640, color: 0xff8a5a, accent: 0x7a2f8f, horns: 6,
+      model: '/models/bosses/pulu.glb', size: 4.6 } },
 ];
 
 export function stageUnlocked(idx: number, cleared: string[]): boolean {
