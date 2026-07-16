@@ -1066,6 +1066,143 @@ html, body {
 }
 
 /* ============================================================
+   Halaman pilih karakter (grid kartu + pratinjau 3D kanan)
+   ============================================================ */
+#chars-screen { padding: 0; }
+
+.chars-close {
+  position: fixed; top: 16px; left: 16px; z-index: 3;
+  width: 46px; height: 46px; border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.95); cursor: pointer;
+  background: linear-gradient(180deg, var(--orange-hi), var(--orange));
+  color: #17120a; font-size: 19px; font-weight: 900;
+  box-shadow: 0 6px 14px rgba(120, 60, 10, 0.3);
+  transition: transform 0.1s;
+}
+.chars-close:active { transform: scale(0.9); }
+
+.chars-panel {
+  position: fixed; top: 16px; bottom: 16px; left: 76px;
+  width: min(470px, 58vw);
+  display: flex; flex-direction: column;
+  background: rgba(255, 250, 242, 0.92);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  box-shadow: 0 12px 34px rgba(120, 60, 10, 0.3);
+  overflow: hidden;
+}
+.chars-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px 12px;
+}
+.chars-head h3 {
+  font-family: 'Archivo Black', 'Archivo', sans-serif; font-style: italic;
+  font-size: 19px; letter-spacing: 1px; color: #5a3410;
+}
+.chars-count {
+  font-size: 12px; font-weight: 900; letter-spacing: 1px;
+  color: #b06a10;
+  background: rgba(247, 165, 29, 0.16);
+  border: 1px solid rgba(247, 165, 29, 0.4);
+  border-radius: 999px; padding: 5px 13px;
+}
+.chars-grid {
+  flex: 1; overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 4px 18px 18px;
+  align-content: start;
+}
+.char-card {
+  position: relative;
+  display: flex; flex-direction: column;
+  border: none; background: none; cursor: pointer; padding: 0;
+  border-radius: 16px;
+  transition: transform 0.1s;
+}
+.char-card:active { transform: scale(0.95); }
+.cc-img {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 16px 16px 6px 6px;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--sw) 40%, #cbbcf0), #8d7ecf);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 10px rgba(90, 50, 10, 0.18);
+}
+.cc-img img { width: 100%; height: 100%; object-fit: cover; }
+.cc-ph { font-size: 38px; opacity: 0.45; }
+.char-card.locked .cc-img img { filter: grayscale(0.9) brightness(0.55); }
+.char-card.locked .cc-img .cc-ph { filter: grayscale(1); opacity: 0.3; }
+.cc-lock {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.cc-name {
+  margin-top: -4px;
+  padding: 6px 4px 5px;
+  border-radius: 6px 6px 12px 12px;
+  background: linear-gradient(180deg, #7f7ae0, #5a55c0);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  font-size: 12px; font-weight: 900; letter-spacing: 0.5px;
+  color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.char-card.sel .cc-img { border-color: var(--orange-hi); box-shadow: 0 0 16px rgba(247, 165, 29, 0.75); }
+.char-card.sel .cc-name { background: linear-gradient(180deg, var(--orange-hi), var(--orange)); color: #17120a; text-shadow: none; }
+.cc-price {
+  position: absolute; top: 6px; right: 6px;
+  font-size: 10px; font-weight: 900;
+  color: #fff; background: rgba(20, 14, 8, 0.72);
+  border-radius: 999px; padding: 3px 8px;
+}
+
+/* Sisi kanan: nama + tombol konfirmasi (pratinjau 3D dari canvas) */
+.chars-side {
+  position: fixed; right: 4vw; top: 12vh; bottom: 8vh;
+  width: 32vw; min-width: 230px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.chars-side h2 {
+  font-family: 'Archivo Black', 'Archivo', sans-serif; font-style: italic;
+  font-size: clamp(26px, 4.5vw, 42px); letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 0 3px 10px rgba(120, 50, 0, 0.5), 0 0 24px rgba(255, 255, 255, 0.35);
+}
+.chars-side p {
+  font-size: 13.5px; font-weight: 700; font-style: italic;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 2px 6px rgba(120, 50, 0, 0.55);
+  margin-top: -4px;
+}
+.btn-chars {
+  pointer-events: auto;
+  border: 3px solid #fff; outline: none; cursor: pointer;
+  font-family: 'Archivo Black', 'Archivo', sans-serif; font-style: italic;
+  font-size: clamp(16px, 3.4vw, 21px); letter-spacing: 2px;
+  color: #17120a;
+  background: linear-gradient(180deg, var(--orange-hi), var(--orange));
+  border-radius: 20px;
+  padding: 15px 42px;
+  box-shadow: 0 8px 22px rgba(200, 110, 10, 0.45), var(--glow-orange);
+  transition: transform 0.1s;
+}
+.btn-chars:active { transform: scale(0.95); }
+.btn-chars.inuse { filter: saturate(0.35) brightness(1.05); }
+
+/* Layar sempit: panel menyempit, sisi kanan menimpa bawah */
+@media (max-width: 700px) {
+  .chars-panel { left: 72px; width: min(400px, 52vw); }
+  .chars-grid { grid-template-columns: repeat(2, 1fr); }
+  .chars-side { right: 2vw; width: 40vw; top: auto; bottom: 5vh; height: 30vh; }
+}
+
+/* ============================================================
    Vignette arena + intro bos
    ============================================================ */
 .vignette {

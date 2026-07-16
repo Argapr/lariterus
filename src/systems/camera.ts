@@ -28,10 +28,12 @@ export function updateCamera(dt: number) {
   }
   let cx = game.laneX * 0.45;
   let cy = 4.1, cz = 6.4;
+  // Halaman pilih karakter: panel grid di kiri → karakter digeser ke kanan layar
+  const charShift = game.state === 'menu' && menuState.charSelect ? 0.9 : 0;
   if (game.state === 'menu') {
     if (menuState.tab === 'tema') { cx = 0; cy = 4.6; cz = 7.5; }
     else if (menuState.tab === 'koleksi') { cx = 0; cy = 3.3; cz = 5.6; }
-    else { cx = 0; cy = 1.65; cz = -3.7; }
+    else { cx = charShift; cy = 1.65; cz = -3.7; }
   }
   if (game.shake > 0) {
     game.shake -= dt;
@@ -42,7 +44,7 @@ export function updateCamera(dt: number) {
   const menuChar = game.state === 'menu' && menuState.tab !== 'tema';
   const lookTarget = game.state === 'menu' && menuState.tab === 'koleksi'
     ? new THREE.Vector3(0.15, 1.2, -3)
-    : menuChar ? new THREE.Vector3(0, 1.15, 0)
+    : menuChar ? new THREE.Vector3(charShift, 1.15, 0)
       : new THREE.Vector3(game.laneX * 0.3, 1.3, -5);
   camera.lookAt(lookTarget);
 }

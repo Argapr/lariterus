@@ -62,6 +62,7 @@ export const menuState = {
   buyArmed: false,
   stagePick: 0,
   arsenalReturn: 'map' as 'map' | 'stage',
+  charSelect: false, // halaman pilih karakter terbuka (kamera geser karakter ke kanan)
 };
 
 export function clearList(list: { mesh?: THREE.Object3D }[] | THREE.Object3D[]) {

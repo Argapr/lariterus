@@ -47,6 +47,12 @@ export function refreshMenu() {
   const owned = it.price === 0 || ownedIds.includes(it.id);
   menuState.buyArmed = false;
 
+  // Tab karakter: pemilihan pindah ke halaman sendiri → panah & titik disembunyikan
+  const isCharTab = menuState.tab === 'karakter';
+  $('car-prev').classList.toggle('hidden', isCharTab);
+  $('car-next').classList.toggle('hidden', isCharTab);
+  $('car-dots').classList.toggle('hidden', isCharTab);
+
   $('car-name').textContent = it.name.toUpperCase();
   $('car-desc').textContent = owned ? it.desc : `${it.desc} · 🔒 terkunci`;
   $('car-dots').innerHTML = list.map((x, i) => {
@@ -98,6 +104,7 @@ export function refreshMenu() {
 }
 
 export function carouselGo(i: number) {
+  if (menuState.tab === 'karakter') return; // karakter dipilih lewat halamannya sendiri
   AudioFX.click();
   const { list } = carouselItem();
   const idx = ((i % list.length) + list.length) % list.length;

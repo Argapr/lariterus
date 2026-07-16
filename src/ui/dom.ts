@@ -13,6 +13,7 @@ export const screens: Record<string, HTMLElement> = {
   map: $('map-screen'), arsenal: $('arsenal-screen'), stage: $('stage-screen'),
   preboss: $('preboss-screen'), bosshud: $('bosshud'), victory: $('victory-screen'),
   defeat: $('defeat-screen'),
+  chars: $('chars-screen'),
 };
 
 export function showScreen(...names: string[]) {

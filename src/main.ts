@@ -30,6 +30,7 @@ import { updatePowerFX, updateMultUI } from './ui/hud';
 import { carouselItem, carouselMove, tryBuy, refreshMenu, setTab } from './ui/menu';
 import { renderDaily, claimDaily, renderWheel, spinWheel, wheel, openChest, maybeShowChest, dailyInfo } from './ui/rewards';
 import { renderProfile } from './ui/progress';
+import { openCharSelect, initCharSelect, charSelectVisible } from './ui/charSelect';
 
 // ============================================================
 // Bootstrap
@@ -68,7 +69,12 @@ on('btn-adventure', openMap);
 on('car-prev', () => carouselMove(-1));
 on('car-next', () => carouselMove(1));
 document.querySelectorAll<HTMLElement>('.tab').forEach(b =>
-  b.addEventListener('click', () => setTab(b.dataset.tab!)));
+  b.addEventListener('click', () => {
+    // Karakter dipilih lewat halaman sendiri (bukan carousel panah)
+    if (b.dataset.tab === 'karakter') { setTab('karakter'); openCharSelect(); return; }
+    setTab(b.dataset.tab!);
+  }));
+initCharSelect();
 
 // --- HUD / pause / gameover / revive ---
 on('btn-pause', () => { AudioFX.click(); pauseGame(); });
@@ -118,6 +124,12 @@ on('btn-arsenal', () => renderArsenal());
 // ============================================================
 window.addEventListener('keydown', (e) => {
   if (game.state === 'menu') {
+    // Halaman pilih karakter terbuka: Enter = pakai, Escape = tutup
+    if (charSelectVisible()) {
+      if (e.code === 'Enter' || e.code === 'Space') $('btn-chars-confirm').click();
+      else if (e.code === 'Escape') $('btn-chars-close').click();
+      return;
+    }
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') carouselMove(-1);
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') carouselMove(1);
     else if (e.code === 'Enter' || e.code === 'Space') $('btn-play').click();
