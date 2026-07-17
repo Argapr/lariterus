@@ -235,7 +235,9 @@ function tick(now: number) {
     moveWorld(dt * 0.6);
     game.nextSpawn = game.distance + 999;
     updatePlayer(dt);
-    trailFX.update(dt, game.speed * dt * 0.6);
+    // Di halaman koleksi: partikel jejak mengambang di tempat (di belakang karakter)
+    // lalu memudar — tidak mengalir ke +Z dunia yang salah arah saat karakter diputar.
+    trailFX.update(dt, menuState.collectionSelect ? 0 : game.speed * dt * 0.6);
     // Halaman pilih (karakter/koleksi): putaran dikontrol geseran; selain itu ayun lembut
     game.charMesh.rotation.y = (menuState.charSelect || menuState.collectionSelect)
       ? menuState.spin

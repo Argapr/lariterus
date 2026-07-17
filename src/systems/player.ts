@@ -190,7 +190,10 @@ export function updatePlayer(dt: number) {
     trailFX.timer -= dt;
     if (trailFX.timer <= 0) {
       trailFX.timer = 0.045;
-      trailFX.spawn(game.laneX, 0.15, 0.45);
+      // "Belakang" karakter = +Z lokal; saat pratinjau diputar, ikut berputar
+      // supaya jejak selalu di punggung karakter, bukan di titik dunia tetap.
+      const s = menuState.collectionSelect ? menuState.spin : 0;
+      trailFX.spawn(game.laneX + 0.45 * Math.sin(s), 0.15, 0.45 * Math.cos(s));
     }
   }
 }
